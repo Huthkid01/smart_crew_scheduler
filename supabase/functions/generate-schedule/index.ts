@@ -86,8 +86,7 @@ serve(async (req) => {
 
     // 4. Call Google Gemini API
     // Use the key provided by the user, falling back to env var
-    // Hardcoding for now as requested, but ideally should be in Deno.env
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || "AIzaSyBXeG7ooy1-Q8udF_S5QlGqI5_0ukigVCo"; 
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY'); 
     
     let generatedSchedule: any[] = [];
 
