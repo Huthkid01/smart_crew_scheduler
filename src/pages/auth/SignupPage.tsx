@@ -123,7 +123,7 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black p-4">
-      <div className="w-full max-w-md space-y-8 bg-zinc-900 p-8 rounded-xl border border-zinc-800">
+      <div className="w-full max-w-[400px] sm:max-w-md space-y-8 bg-zinc-900 p-6 sm:p-8 rounded-xl border border-zinc-800">
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">

@@ -1,5 +1,5 @@
-import { NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, 
@@ -34,7 +34,7 @@ const navigation: NavItem[] = [
   { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, roles: ['admin', 'manager'] },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const navigate = useNavigate();
   const [userRole, setUserRole] = useState<string | null>(null);
 
@@ -68,22 +68,71 @@ export function Sidebar() {
   });
 
   return (
-    <div className="flex h-screen flex-col bg-zinc-950 border-r border-zinc-800 w-64 fixed left-0 top-0">
-      <div className="p-6">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-            <Zap className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="text-xl font-bold text-white">SmartCrew</span>
-        </div>
-      </div>
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={onClose}
+        />
+      )}
       
-      <nav className="flex-1 px-4 space-y-2 mt-4">
-        {filteredNavigation.map((item) => (
-          <NavLink
-            key={item.name}
-            to={item.href}
-            end={item.end}
+      <div className={cn(
+        "flex h-screen flex-col bg-zinc-950 border-r border-zinc-800 w-64 fixed left-0 top-0 z-50 transition-transform duration-300 md:translate-x-0",
+        isOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        <div className="p-6">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+              <Zap className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <span className="text-xl font-bold text-white">SmartCrew</span>
+          </div>
+        </div>
+        
+        <nav className="flex-1 px-4 space-y-2 mt-4">
+          {filteredNavigation.map((item) => (
+            <NavLink
+              key={item.name}
+              to={item.href}
+              end={item.end}
+              onClick={onClose} // Close sidebar on mobile when link is clicked
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                )
+              }
+            >
+              <item.icon className="h-5 w-5" />
+              {item.name}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-zinc-800 space-y-1">
+          {userRole === 'admin' && (
+               <NavLink 
+               to="/dashboard/settings"
+               onClick={onClose}
+               className={({ isActive }) =>
+                 cn(
+                   "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                   isActive
+                     ? "bg-primary/10 text-primary"
+                     : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                 )
+               }
+             >
+               <Building className="h-5 w-5" />
+               Organization
+             </NavLink>
+          )}
+          <NavLink 
+            to="/dashboard/profile"
+            onClick={onClose}
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
@@ -93,51 +142,18 @@ export function Sidebar() {
               )
             }
           >
-            <item.icon className="h-5 w-5" />
-            {item.name}
+            <Settings className="h-5 w-5" />
+            Profile
           </NavLink>
-        ))}
-      </nav>
-
-      <div className="p-4 border-t border-zinc-800 space-y-1">
-        {userRole === 'admin' && (
-             <NavLink 
-             to="/dashboard/settings"
-             className={({ isActive }) =>
-               cn(
-                 "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                 isActive
-                   ? "bg-primary/10 text-primary"
-                   : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
-               )
-             }
-           >
-             <Building className="h-5 w-5" />
-             Organization
-           </NavLink>
-        )}
-        <NavLink 
-          to="/dashboard/profile"
-          className={({ isActive }) =>
-            cn(
-              "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-              isActive
-                ? "bg-primary/10 text-primary"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
-            )
-          }
-        >
-          <Settings className="h-5 w-5" />
-          Profile
-        </NavLink>
-        <button 
-          onClick={handleSignOut}
-          className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-400 hover:text-white w-full rounded-md hover:bg-zinc-900 transition-colors"
-        >
-          <LogOut className="h-5 w-5" />
-          Sign Out
-        </button>
+          <button 
+            onClick={handleSignOut}
+            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-400 hover:text-white w-full rounded-md hover:bg-zinc-900 transition-colors"
+          >
+            <LogOut className="h-5 w-5" />
+            Sign Out
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

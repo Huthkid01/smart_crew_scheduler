@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -194,14 +194,14 @@ export default function AvailabilityPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="text-center sm:text-left">
             <h1 className="text-3xl font-bold tracking-tight text-white">Availability</h1>
             <p className="text-zinc-400">Manage weekly availability for your team.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                <SelectTrigger className="w-[200px] bg-zinc-900 border-zinc-800 text-white">
+                <SelectTrigger className="w-full sm:w-[200px] bg-zinc-900 border-zinc-800 text-white">
                     <SelectValue placeholder="Select Employee" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -212,7 +212,7 @@ export default function AvailabilityPage() {
             </Select>
             <Dialog open={isTimeOffOpen} onOpenChange={setIsTimeOffOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" className="bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-800">
+                <Button variant="outline" className="bg-zinc-800 hover:bg-zinc-700 transition-colors border-zinc-700 text-white hover:text-white w-full sm:w-auto">
                 <CalendarIcon className="mr-2 h-4 w-4" /> Request Time Off
                 </Button>
             </DialogTrigger>

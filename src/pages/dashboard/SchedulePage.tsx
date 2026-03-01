@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Calendar, momentLocalizer, Views } from "react-big-calendar";
 import type { View } from "react-big-calendar";
 import moment from "moment";
@@ -194,6 +194,10 @@ export default function SchedulePage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("No user found");
+        
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) throw new Error("No active session");
 
         const { data: profile } = await supabase
             .from('profiles')
@@ -212,6 +216,9 @@ export default function SchedulePage() {
                 start_date: startDate,
                 end_date: endDate,
                 optimization_goal: goal
+            },
+            headers: {
+                Authorization: `Bearer ${session?.access_token}`
             }
         });
 
@@ -238,6 +245,7 @@ export default function SchedulePage() {
             
             alert(`Successfully generated and saved ${shiftsToInsert.length} shifts!`);
             fetchShifts(); // Refresh calendar
+            setIsAiModalOpen(false);
         } else {
             alert("AI could not generate any shifts for this criteria.");
         }
@@ -247,7 +255,6 @@ export default function SchedulePage() {
         alert("Failed to generate schedule. Please try again.");
       } finally {
         setIsLoading(false);
-        setIsAiModalOpen(false);
       }
   };
 
@@ -276,8 +283,8 @@ export default function SchedulePage() {
     };
 
     return (
-      <div className="flex items-center justify-between mb-4 p-2 bg-zinc-900 rounded-lg border border-zinc-800">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col md:flex-row items-center justify-between mb-4 p-2 bg-zinc-900 rounded-lg border border-zinc-800 gap-4">
+        <div className="flex items-center gap-2 order-2 md:order-1">
             <Button variant="outline" size="sm" onClick={goToBack} className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700">
                 <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -289,11 +296,11 @@ export default function SchedulePage() {
             </Button>
         </div>
         
-        <div className="text-center">
+        <div className="text-center order-1 md:order-2">
             {label()}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 order-3">
              <Select value={view} onValueChange={(v) => handleViewChange(v as View)}>
                 <SelectTrigger className="w-[120px] bg-zinc-800 border-zinc-700 h-9">
                     <SelectValue placeholder="View" />
@@ -348,15 +355,15 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="text-center sm:text-left">
             <h1 className="text-3xl font-bold tracking-tight text-white">Schedule</h1>
             <p className="text-zinc-400">Manage shifts and staffing.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
             <Button 
                 variant="outline" 
-                className="bg-transparent text-white border-zinc-700 hover:bg-zinc-800"
+                className="bg-zinc-800 hover:bg-zinc-700 transition-colors text-white hover:text-white border-zinc-700"
                 onClick={handlePublish}
                 disabled={isPublishing}
             >
@@ -365,12 +372,12 @@ export default function SchedulePage() {
             </Button>
             <Dialog open={isAiModalOpen} onOpenChange={setIsAiModalOpen}>
                 <DialogTrigger asChild>
-                    <Button className="bg-primary text-black hover:bg-primary/90 font-bold gap-2">
+                    <Button className="bg-primary text-black hover:bg-primary/90 hover:text-black font-bold gap-2">
                         <Sparkles className="h-4 w-4" />
                         AI Scheduler
                     </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-zinc-900 border-zinc-800 text-white sm:max-w-[425px]">
+                <DialogContent className="bg-zinc-900 border-zinc-800 text-white sm:max-w-[425px] relative overflow-hidden">
                     <DialogHeader>
                         <DialogTitle>AI Scheduling Assistant</DialogTitle>
                         <DialogDescription className="text-zinc-400">
@@ -379,30 +386,39 @@ export default function SchedulePage() {
                     </DialogHeader>
                     <form onSubmit={handleGenerateSchedule}>
                         <div className="grid gap-4 py-4">
+                            {isLoading && (
+                                <div className="absolute inset-0 bg-zinc-950/90 flex flex-col items-center justify-center z-50 rounded-lg">
+                                    <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+                                    <p className="text-white font-medium">Generating Schedule...</p>
+                                    <p className="text-zinc-400 text-sm mt-2">This may take 10-20 seconds.</p>
+                                </div>
+                            )}
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="date-range" className="text-right">
                                 Date Range
                                 </Label>
                                 <div className="col-span-3 flex gap-2">
-                                    <Input type="date" className="bg-zinc-950 border-zinc-800" required />
+                                    <Input name="start_date" type="date" className="bg-zinc-950 border-zinc-800" required />
                                     <span className="self-center">-</span>
-                                    <Input type="date" className="bg-zinc-950 border-zinc-800" required />
+                                    <Input name="end_date" type="date" className="bg-zinc-950 border-zinc-800" required />
                                 </div>
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="goal" className="text-right">
                                 Goal
                                 </Label>
-                                <Select defaultValue="balance">
-                                    <SelectTrigger className="col-span-3 bg-zinc-950 border-zinc-800">
-                                        <SelectValue placeholder="Select optimization goal" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
-                                        <SelectItem value="minimize_cost">Minimize Cost</SelectItem>
-                                        <SelectItem value="maximize_coverage">Maximize Coverage</SelectItem>
-                                        <SelectItem value="balance">Balance Both</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <div className="col-span-3">
+                                    <Select name="goal" defaultValue="balance">
+                                        <SelectTrigger className="bg-zinc-950 border-zinc-800">
+                                            <SelectValue placeholder="Select optimization goal" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
+                                            <SelectItem value="minimize_cost">Minimize Cost</SelectItem>
+                                            <SelectItem value="maximize_coverage">Maximize Coverage</SelectItem>
+                                            <SelectItem value="balance">Balance Both</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                         </div>
                         <DialogFooter>
@@ -417,7 +433,7 @@ export default function SchedulePage() {
 
             <Dialog open={isAddShiftOpen} onOpenChange={setIsAddShiftOpen}>
                 <DialogTrigger asChild>
-                    <Button variant="outline" className="bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-800 gap-2">
+                    <Button variant="outline" className="bg-zinc-800 hover:bg-zinc-700 transition-colors border-zinc-700 text-white hover:text-white gap-2">
                         <Plus className="h-4 w-4" />
                         Add Shift
                     </Button>
@@ -476,7 +492,7 @@ export default function SchedulePage() {
         </div>
       </div>
 
-      <div className="flex-1 bg-zinc-900 rounded-lg border border-zinc-800 p-4 min-h-[600px]">
+      <div className="h-[700px] bg-zinc-900 rounded-lg border border-zinc-800 p-4">
         <Calendar
             localizer={localizer}
             events={events}

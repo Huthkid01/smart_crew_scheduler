@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Plus, Search, MoreHorizontal, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -183,8 +183,8 @@ export default function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="text-center sm:text-left">
             <h1 className="text-3xl font-bold tracking-tight text-white">Employees</h1>
             <p className="text-zinc-400">Manage your team members and their roles.</p>
         </div>
@@ -193,7 +193,7 @@ export default function EmployeesPage() {
             if (!open) setEditingEmployee(null);
         }}>
           <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-black font-bold" onClick={openAddDialog}>
+            <Button className="bg-primary hover:bg-primary/90 text-black font-bold w-full sm:w-auto" onClick={openAddDialog}>
               <Plus className="mr-2 h-4 w-4" /> Add Employee
             </Button>
           </DialogTrigger>
@@ -270,20 +270,20 @@ export default function EmployeesPage() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : (
-        <div className="rounded-md border border-zinc-800">
+        <div className="rounded-md border border-zinc-800 bg-zinc-900">
         <div className="p-4">
             <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-400" />
             <Input
                 placeholder="Search employees..."
-                className="pl-8 bg-zinc-900 border-zinc-800 text-white w-full md:w-[300px]"
+                className="pl-8 bg-zinc-950 border-zinc-800 text-white w-full md:w-[300px]"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
             />
             </div>
         </div>
         <div className="relative w-full overflow-auto">
-            <table className="w-full caption-bottom text-sm text-left">
+            <table className="w-full caption-bottom text-sm text-left min-w-[800px]">
             <thead className="[&_tr]:border-b [&_tr]:border-zinc-800">
                 <tr className="border-b transition-colors hover:bg-zinc-900/50 data-[state=selected]:bg-zinc-900">
                 <th className="h-12 px-4 align-middle font-medium text-zinc-400">Name</th>

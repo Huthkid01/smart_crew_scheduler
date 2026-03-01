@@ -158,7 +158,7 @@ export default function Overview() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight text-white">Dashboard Overview</h1>
       
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="bg-zinc-900 border-zinc-800 text-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
@@ -204,8 +204,8 @@ export default function Overview() {
         </Card>
       </div>
       
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4 bg-zinc-900 border-zinc-800 text-white">
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
+        <Card className="col-span-1 lg:col-span-4 bg-zinc-900 border-zinc-800 text-white">
           <CardHeader>
             <CardTitle>Upcoming Shifts</CardTitle>
           </CardHeader>
@@ -215,12 +215,12 @@ export default function Overview() {
                     <p className="text-zinc-400 text-sm">No upcoming shifts scheduled.</p>
                 ) : (
                     upcomingShifts.map((shift) => (
-                        <div key={shift.id} className="flex items-center justify-between border-b border-zinc-800 pb-2 last:border-0">
+                        <div key={shift.id} className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-800 pb-2 last:border-0 gap-2">
                             <div>
                                 <p className="font-medium">{shift.employees?.name || 'Unassigned'}</p>
                                 <p className="text-sm text-zinc-400">{shift.employees?.position || 'N/A'}</p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-left sm:text-right">
                                 <p className="font-medium">{format(new Date(shift.date), 'MMM dd')}</p>
                                 <p className="text-sm text-zinc-400">
                                     {format(parse(shift.start_time, 'HH:mm:ss', new Date()), 'h:mm a')} - 
@@ -234,7 +234,7 @@ export default function Overview() {
           </CardContent>
         </Card>
         
-        <Card className="col-span-3 bg-zinc-900 border-zinc-800 text-white">
+        <Card className="col-span-1 lg:col-span-3 bg-zinc-900 border-zinc-800 text-white">
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>

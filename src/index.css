@@ -1,71 +1,71 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
 @layer base {
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
- 
+
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
- 
+
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
- 
+
     --primary: 142 76% 36%;
     --primary-foreground: 355.7 100% 97.3%;
- 
+
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
- 
+
     --muted: 240 4.8% 95.9%;
     --muted-foreground: 240 3.8% 46.1%;
- 
+
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
- 
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
- 
+
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 142 76% 36%;
- 
+
     --radius: 0.5rem;
   }
- 
+
   .dark {
     --background: 20 14.3% 4.1%;
     --foreground: 0 0% 95%;
- 
+
     --card: 24 9.8% 10%;
     --card-foreground: 0 0% 95%;
- 
+
     --popover: 0 0% 9%;
     --popover-foreground: 0 0% 95%;
- 
+
     --primary: 142 70% 50%;
     --primary-foreground: 144.9 80.4% 10%;
- 
+
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
- 
+
     --muted: 0 0% 15%;
     --muted-foreground: 240 5% 64.9%;
- 
+
     --accent: 12 6.5% 15.1%;
     --accent-foreground: 0 0% 98%;
- 
+
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 85.7% 97.3%;
- 
+
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 142 70% 50%;
   }
 }
- 
+
 @layer base {
   * {
     @apply border-border;
@@ -73,4 +73,183 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Add global horizontal scrolling fix */
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+}
+
+/* React Big Calendar Dark Mode Overrides */
+.rbc-calendar {
+  @apply font-sans text-zinc-400 bg-zinc-900;
+}
+
+.rbc-header {
+  @apply border-zinc-800 text-zinc-300 font-medium py-2 bg-zinc-900;
+}
+
+.rbc-header.rbc-today {
+  @apply bg-zinc-800 text-white font-bold;
+}
+
+/* Force background colors to override defaults */
+.rbc-day-bg {
+  @apply bg-zinc-900 border-zinc-800 !important;
+}
+
+.rbc-off-range-bg {
+  @apply bg-zinc-950/50 text-zinc-600 !important;
+}
+
+.rbc-today {
+  @apply bg-zinc-800 text-white !important;
+}
+
+.rbc-date-cell {
+    @apply text-zinc-300 !important;
+}
+
+.rbc-off-range .rbc-date-cell {
+    @apply text-zinc-600 !important;
+}
+
+.rbc-toolbar button {
+  @apply text-zinc-300 border-zinc-700 hover:bg-zinc-800 hover:text-white transition-colors;
+}
+
+.rbc-toolbar button.rbc-active {
+  @apply bg-primary text-primary-foreground hover:bg-primary/90 border-primary shadow-sm;
+}
+
+.rbc-month-view, 
+.rbc-time-view,
+.rbc-agenda-view {
+  @apply border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden;
+}
+
+.rbc-month-row, 
+.rbc-day-bg,
+.rbc-time-header-content,
+.rbc-time-content {
+  @apply border-zinc-800;
+}
+
+.rbc-day-bg + .rbc-day-bg,
+.rbc-month-row + .rbc-month-row {
+  @apply border-zinc-800;
+}
+
+.rbc-header + .rbc-header {
+  @apply border-zinc-800;
+}
+
+.rbc-timeslot-group {
+  @apply border-zinc-800 bg-zinc-900;
+}
+
+.rbc-time-view .rbc-header {
+  @apply border-zinc-800;
+}
+
+.rbc-time-view .rbc-allday-cell {
+  @apply hidden; /* Hide all-day row if not needed, or style it */
+}
+
+.rbc-time-gutter .rbc-timeslot-group {
+  @apply border-zinc-800 bg-zinc-900 text-zinc-400;
+}
+
+.rbc-time-slot {
+  @apply border-zinc-800/50;
+}
+
+.rbc-event {
+  @apply bg-primary text-primary-foreground border-0 rounded shadow-sm opacity-90 hover:opacity-100 transition-opacity;
+}
+
+.rbc-event-label {
+  @apply text-xs opacity-90;
+}
+
+/* Fix for the white box in time gutter */
+.rbc-time-gutter.rbc-time-column {
+  @apply bg-zinc-900 border-zinc-800 text-zinc-400;
+}
+
+.rbc-timeslot-group {
+  @apply border-b border-zinc-800;
+}
+
+.rbc-day-slot .rbc-time-slot {
+  @apply border-t border-zinc-800/30;
+}
+
+.rbc-current-time-indicator {
+  @apply bg-primary h-[2px];
+}
+
+/* Scrollbar styling for calendar */
+.rbc-time-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.rbc-time-content::-webkit-scrollbar-track {
+  @apply bg-zinc-950;
+}
+
+.rbc-time-content::-webkit-scrollbar-thumb {
+  @apply bg-zinc-800 rounded;
+}
+
+.rbc-time-content::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-700;
+}
+
+/* Agenda View Styling */
+.rbc-agenda-view table.rbc-agenda-table {
+  @apply w-full border-collapse border-spacing-0;
+}
+
+.rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+  @apply p-3 align-top border-b border-zinc-800 text-zinc-300;
+}
+
+.rbc-agenda-view table.rbc-agenda-table .rbc-agenda-time-cell {
+  @apply whitespace-nowrap font-medium text-primary uppercase text-xs;
+}
+
+.rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  @apply border-b border-zinc-800 text-left px-3 py-2 text-zinc-400 font-medium;
+}
+
+.rbc-agenda-empty {
+  @apply text-zinc-400 p-4 text-center italic;
+}
+
+.rbc-agenda-date-cell {
+  @apply font-semibold text-white;
+}
+
+.rbc-agenda-event-cell {
+  @apply text-zinc-300;
+}
+
+/* Month View Styling Improvements */
+.rbc-month-view .rbc-header {
+  @apply border-b border-zinc-800 text-zinc-400 font-medium p-2 text-center bg-zinc-900;
+}
+
+.rbc-month-view .rbc-date-cell {
+  @apply p-2 text-zinc-400 font-medium text-right;
+}
+
+.rbc-month-view .rbc-date-cell.rbc-current {
+  @apply text-primary font-bold;
+}
+
+.rbc-month-row {
+  @apply overflow-visible; /* Fix for some events getting cut off */
 }
