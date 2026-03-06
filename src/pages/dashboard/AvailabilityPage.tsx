@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Calendar as CalendarIcon, Clock, Loader2, Save } from "lucide-react";
 import { supabase } from "@/supabase/client";
+import { toast } from "sonner";
 
 const DAYS_OF_WEEK = [
   { name: "Sunday", value: 0 },
@@ -64,9 +65,10 @@ export default function AvailabilityPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isTimeOffOpen, setIsTimeOffOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchEmployees();
+    fetchUserData();
   }, []);
 
   useEffect(() => {
@@ -77,35 +79,56 @@ export default function AvailabilityPage() {
     }
   }, [selectedEmployeeId]);
 
-  async function fetchEmployees() {
+  async function fetchUserData() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('org_id')
+        .select('role, org_id')
         .eq('id', user.id)
         .single();
 
       if (profile) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const role = (profile as any).role || 'employee';
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const orgId = (profile as any).org_id;
-        const { data: employeesData } = await supabase
-          .from('employees')
-          .select('id, name')
-          .eq('org_id', orgId)
-          .eq('is_active', true)
-          .order('name');
+        setUserRole(role);
 
-        setEmployees(employeesData || []);
-        if (employeesData && employeesData.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setSelectedEmployeeId((employeesData[0] as any).id);
+        if (role === 'employee') {
+            // If employee, only get own record
+            const { data: emp } = await supabase
+                .from('employees')
+                .select('id, name')
+                .eq('user_id', user.id)
+                .single();
+            
+            if (emp) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const employee = emp as any;
+                setEmployees([employee]);
+                setSelectedEmployeeId(employee.id);
+            }
+        } else {
+            // If admin, get all employees
+            const { data: employeesData } = await supabase
+            .from('employees')
+            .select('id, name')
+            .eq('org_id', orgId)
+            .eq('is_active', true)
+            .order('name');
+
+            const data = (employeesData || []) as unknown as Employee[];
+            setEmployees(data);
+            if (data.length > 0) {
+                setSelectedEmployeeId(data[0].id);
+            }
         }
       }
     } catch (error) {
-      console.error("Error fetching employees:", error);
+      console.error("Error fetching user data:", error);
     } finally {
       setIsLoading(false);
     }
@@ -161,11 +184,6 @@ export default function AvailabilityPage() {
             start_time: item.is_available ? item.start_time : null,
             end_time: item.is_available ? item.end_time : null,
         }));
-
-        // Upsert one by one or batch? Supabase upsert works with array.
-        // But we need to handle the 'id' if it exists to update, or omit to insert?
-        // Actually, if we use upsert with a unique constraint (employee_id, day_of_week), it should work.
-        // The schema has UNIQUE(employee_id, day_of_week).
         
         const { error } = await supabase
             .from('availability')
@@ -173,14 +191,14 @@ export default function AvailabilityPage() {
             .upsert(updates as any, { onConflict: 'employee_id,day_of_week' });
 
         if (error) throw error;
-        alert("Availability saved successfully!");
+        toast.success("Availability saved successfully!");
         
         // Refresh to get IDs
         fetchAvailability(selectedEmployeeId);
 
     } catch (error) {
         console.error("Error saving availability:", error);
-        alert("Failed to save availability.");
+        toast.error("Failed to save availability.");
     } finally {
         setIsSaving(false);
     }
@@ -189,7 +207,7 @@ export default function AvailabilityPage() {
   const handleSubmitTimeOff = (e: React.FormEvent) => {
       e.preventDefault();
       setIsTimeOffOpen(false);
-      alert("Time off request submitted! (Mock functionality)");
+      toast.success("Time off request submitted! (Mock functionality)");
   };
 
   return (
@@ -197,19 +215,21 @@ export default function AvailabilityPage() {
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-center sm:text-left">
             <h1 className="text-3xl font-bold tracking-tight text-white">Availability</h1>
-            <p className="text-zinc-400">Manage weekly availability for your team.</p>
+            <p className="text-zinc-400">Manage weekly availability.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                <SelectTrigger className="w-full sm:w-[200px] bg-zinc-900 border-zinc-800 text-white">
-                    <SelectValue placeholder="Select Employee" />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                    {employees.map(emp => (
-                        <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+            {userRole !== 'employee' && (
+                <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+                    <SelectTrigger className="w-full sm:w-[200px] bg-zinc-900 border-zinc-800 text-white">
+                        <SelectValue placeholder="Select Employee" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                        {employees.map(emp => (
+                            <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
             <Dialog open={isTimeOffOpen} onOpenChange={setIsTimeOffOpen}>
             <DialogTrigger asChild>
                 <Button variant="outline" className="bg-zinc-800 hover:bg-zinc-700 transition-colors border-zinc-700 text-white hover:text-white w-full sm:w-auto">
@@ -248,7 +268,7 @@ export default function AvailabilityPage() {
         </div>
       </div>
 
-      {isLoading && employees.length === 0 ? (
+      {isLoading ? (
           <div className="flex items-center justify-center h-64">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
@@ -270,28 +290,28 @@ export default function AvailabilityPage() {
                     </CardHeader>
                     <CardContent>
                     {dayData.is_available ? (
-                        <div className="flex items-center gap-4 mt-2">
-                        <div className="grid gap-1.5 flex-1">
-                            <Label htmlFor={`start-${day.name}`} className="text-xs text-zinc-400">Start Time</Label>
-                            <div className="relative">
-                            <Clock className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-400" />
+                        <div className="grid grid-cols-2 gap-1 mt-2 w-full">
+                        <div className="grid gap-1 min-w-0">
+                            <Label htmlFor={`start-${day.name}`} className="text-[10px] sm:text-xs text-zinc-400 truncate">Start</Label>
+                            <div className="relative w-full">
+                            <Clock className="hidden sm:block absolute left-2.5 top-2.5 h-4 w-4 text-zinc-400 pointer-events-none" />
                             <Input 
                                 id={`start-${day.name}`}
                                 type="time" 
-                                className="pl-9 bg-zinc-950 border-zinc-800 h-9" 
+                                className="pl-2 sm:pl-9 bg-zinc-950 border-zinc-800 h-8 sm:h-9 w-full min-w-0 text-xs sm:text-sm px-1" 
                                 value={dayData.start_time?.slice(0, 5) || "09:00"}
                                 onChange={(e) => handleAvailabilityChange(day.value, "start_time", e.target.value)}
                             />
                             </div>
                         </div>
-                        <div className="grid gap-1.5 flex-1">
-                            <Label htmlFor={`end-${day.name}`} className="text-xs text-zinc-400">End Time</Label>
-                            <div className="relative">
-                            <Clock className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-400" />
+                        <div className="grid gap-1 min-w-0">
+                            <Label htmlFor={`end-${day.name}`} className="text-[10px] sm:text-xs text-zinc-400 truncate">End</Label>
+                            <div className="relative w-full">
+                            <Clock className="hidden sm:block absolute left-2.5 top-2.5 h-4 w-4 text-zinc-400 pointer-events-none" />
                             <Input 
                                 id={`end-${day.name}`}
                                 type="time" 
-                                className="pl-9 bg-zinc-950 border-zinc-800 h-9" 
+                                className="pl-2 sm:pl-9 bg-zinc-950 border-zinc-800 h-8 sm:h-9 w-full min-w-0 text-xs sm:text-sm px-1" 
                                 value={dayData.end_time?.slice(0, 5) || "17:00"}
                                 onChange={(e) => handleAvailabilityChange(day.value, "end_time", e.target.value)}
                             />

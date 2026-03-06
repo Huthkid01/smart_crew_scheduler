@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Building } from "lucide-react";
 import { supabase } from "@/supabase/client";
+import { toast } from "sonner";
 // import type { Database } from "@/supabase/types";
 
 interface Profile {
@@ -77,10 +78,10 @@ export default function SettingsPage() {
             .eq('id', org.id);
 
         if (error) throw error;
-        alert("Organization settings updated successfully!");
+        toast.success("Organization settings updated successfully!");
     } catch (error) {
         console.error("Error updating organization:", error);
-        alert("Failed to update organization.");
+        toast.error("Failed to update organization.");
     } finally {
         setIsSaving(false);
     }

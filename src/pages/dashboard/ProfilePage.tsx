@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera, Loader2 } from "lucide-react";
 import { supabase } from "@/supabase/client";
+import { toast } from "sonner";
 
 export default function ProfilePage() {
   const [user, setUser] = useState({
@@ -65,13 +66,13 @@ export default function ProfilePage() {
 
     // Check file type
     if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file');
+        toast.error('Please upload an image file');
         return;
     }
 
     // Check file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
-        alert('Image must be less than 2MB');
+        toast.error('Image must be less than 2MB');
         return;
     }
 
@@ -106,11 +107,11 @@ export default function ProfilePage() {
 
         // 4. Update Local State
         setUser(prev => ({ ...prev, avatarUrl: publicUrl }));
-        alert('Profile picture updated!');
+        toast.success('Profile picture updated!');
 
     } catch (error) {
         console.error('Error uploading avatar:', error);
-        alert('Failed to upload avatar. Make sure the "avatars" storage bucket exists and is public.');
+        toast.error('Failed to upload avatar. Make sure the "avatars" storage bucket exists and is public.');
     } finally {
         setIsSaving(false);
     }
@@ -129,10 +130,10 @@ export default function ProfilePage() {
             .eq('id', user.id);
 
         if (error) throw error;
-        alert("Profile updated successfully!");
+        toast.success("Profile updated successfully!");
     } catch (error) {
         console.error("Error updating profile:", error);
-        alert("Failed to update profile.");
+        toast.error("Failed to update profile.");
     } finally {
         setIsSaving(false);
     }

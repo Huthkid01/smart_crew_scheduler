@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -26,9 +26,26 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
+  // Check if already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            navigate('/dashboard');
+        }
+    };
+    checkSession();
+  }, [navigate]);
+
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     setError(null);
+
+    // Timeout safety
+    const timeoutId = setTimeout(() => {
+        setIsLoading(false);
+        setError("Request timed out. Please check your connection.");
+    }, 15000);
 
     try {
       const { error: authError } = await supabase.auth.signInWithPassword({
@@ -36,14 +53,19 @@ export default function LoginPage() {
         password: data.password,
       });
 
+      clearTimeout(timeoutId);
+
       if (authError) throw authError;
       
+      // Force navigation
       navigate('/dashboard');
     } catch (err: unknown) {
+      clearTimeout(timeoutId);
       console.error(err);
       const errorMessage = err instanceof Error ? err.message : "Invalid email or password";
       setError(errorMessage);
     } finally {
+      clearTimeout(timeoutId);
       setIsLoading(false);
     }
   };

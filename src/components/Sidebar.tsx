@@ -28,9 +28,9 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, end: true },
-  { name: 'Schedule', href: '/dashboard/schedule', icon: Calendar },
+  { name: 'Schedule', href: '/dashboard/schedule', icon: Calendar, roles: ['admin', 'manager'] },
   { name: 'Employees', href: '/dashboard/employees', icon: Users, roles: ['admin', 'manager'] },
-  { name: 'Availability', href: '/dashboard/availability', icon: Clock },
+  { name: 'Availability', href: '/dashboard/availability', icon: Clock, roles: ['admin', 'manager'] },
   { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, roles: ['admin', 'manager'] },
 ];
 
@@ -61,11 +61,21 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     navigate('/login');
   };
 
-  const filteredNavigation = navigation.filter(item => {
-    if (!item.roles) return true;
-    if (!userRole) return false;
-    return item.roles.includes(userRole);
-  });
+  const filteredNavigation = navigation
+    .map(item => {
+      if (item.name === 'Overview') {
+        if (userRole === 'employee') {
+          return { ...item, name: 'Home', href: '/dashboard/home', end: false };
+        }
+        return { ...item, href: '/dashboard/overview', end: false };
+      }
+      return item;
+    })
+    .filter(item => {
+      if (!item.roles) return true;
+      if (!userRole) return false;
+      return item.roles.includes(userRole);
+    });
 
   return (
     <>

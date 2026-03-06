@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, MoreHorizontal, Loader2 } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/supabase/client";
 import type { Database } from "@/supabase/types";
+import { toast } from "sonner";
 
 interface Profile {
   org_id: string;
@@ -51,6 +52,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isRevokeOpen, setIsRevokeOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -88,6 +90,7 @@ export default function EmployeesPage() {
     } catch (error) {
       console.error('Error fetching employees:', error);
     } finally {
+      console.log("EmployeesPage: fetchEmployees finished, setting isLoading false");
       setIsLoading(false);
     }
   }
@@ -106,11 +109,12 @@ export default function EmployeesPage() {
     const formData = new FormData(e.target as HTMLFormElement);
     const skillsString = formData.get("skills") as string;
     const skills = skillsString ? skillsString.split(',').map(s => s.trim()) : [];
+    const email = formData.get("email") as string;
 
     const employeeData: EmployeeInsert = {
         org_id: orgId,
         name: formData.get("name") as string,
-        email: formData.get("email") as string,
+        email: email,
         position: formData.get("position") as string,
         hourly_rate: parseFloat(formData.get("rate") as string),
         is_active: true,
@@ -131,16 +135,44 @@ export default function EmployeesPage() {
             if (error) throw error;
 
             setEmployees(employees.map(emp => emp.id === editingEmployee.id ? data : emp));
+            toast.success("Employee updated successfully!");
         } else {
-            // Create new employee
+            // 1. Create new employee record
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { data, error } = await (supabase.from('employees') as any)
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                .insert([employeeData] as any)
+                .insert([{ ...employeeData, invite_status: 'pending' }] as any)
                 .select()
                 .single();
 
             if (error) throw error;
+
+            // 2. Trigger invitation (via Edge Function)
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const inviteResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-employee`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session?.access_token}`,
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        employee_id: data.id,
+                        org_id: orgId
+                    })
+                });
+
+                if (!inviteResponse.ok) {
+                    const errorData = await inviteResponse.json();
+                    throw new Error(errorData.error || 'Failed to send invitation');
+                }
+
+                toast.success("Employee added and invitation sent!");
+            } catch (inviteError) {
+                console.error("Invitation failed:", inviteError);
+                toast.warning("Employee added, but invitation failed to send. Please retry.");
+            }
 
             setEmployees([...employees, data]);
         }
@@ -149,7 +181,7 @@ export default function EmployeesPage() {
         setEditingEmployee(null);
     } catch (error) {
         console.error('Error saving employee:', error);
-        alert('Failed to save employee');
+        toast.error('Failed to save employee');
     }
   };
 
@@ -157,6 +189,33 @@ export default function EmployeesPage() {
       if (!confirm("Are you sure you want to delete this employee?")) return;
 
       try {
+          // 1. Get user_id to delete from Auth
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: empData } = await (supabase.from('employees') as any)
+            .select('user_id')
+            .eq('id', id)
+            .single();
+
+          // 2. Delete from Auth (if linked)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((empData as any)?.user_id) {
+             const { data: { session } } = await supabase.auth.getSession();
+             try {
+                 await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session?.access_token}`,
+                    },
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    body: JSON.stringify({ user_id: (empData as any).user_id })
+                 });
+             } catch (err) {
+                 console.error("Failed to delete auth user:", err);
+                 // We continue to delete the record so they are removed from the list
+             }
+          }
+
           const { error } = await supabase
               .from('employees')
               .delete()
@@ -165,9 +224,10 @@ export default function EmployeesPage() {
           if (error) throw error;
 
           setEmployees(employees.filter(emp => emp.id !== id));
+          toast.success("Employee deleted successfully!");
       } catch (error) {
           console.error('Error deleting employee:', error);
-          alert('Failed to delete employee');
+          toast.error('Failed to delete employee');
       }
   };
 
@@ -181,6 +241,33 @@ export default function EmployeesPage() {
       setIsAddOpen(true);
   };
 
+  const handleRevokeAccess = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const formData = new FormData(e.target as HTMLFormElement);
+      const email = formData.get("email") as string;
+      
+      try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`,
+            },
+            body: JSON.stringify({ email })
+          });
+
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "Failed to revoke access");
+
+          toast.success(`Login access revoked for ${email}`);
+          setIsRevokeOpen(false);
+      } catch (error) {
+          console.error("Error revoking access:", error);
+          toast.error(error instanceof Error ? error.message : "Failed to revoke access");
+      }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -188,15 +275,47 @@ export default function EmployeesPage() {
             <h1 className="text-3xl font-bold tracking-tight text-white">Employees</h1>
             <p className="text-zinc-400">Manage your team members and their roles.</p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={(open) => {
-            setIsAddOpen(open);
-            if (!open) setEditingEmployee(null);
-        }}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-black font-bold w-full sm:w-auto" onClick={openAddDialog}>
-              <Plus className="mr-2 h-4 w-4" /> Add Employee
-            </Button>
-          </DialogTrigger>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Dialog open={isRevokeOpen} onOpenChange={setIsRevokeOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="destructive" className="w-full sm:w-auto">
+                        <Trash2 className="mr-2 h-4 w-4" /> Revoke Access
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
+                    <DialogHeader>
+                        <DialogTitle>Revoke Login Access</DialogTitle>
+                        <DialogDescription className="text-zinc-400">
+                            Enter the email of the deleted employee to remove their login access.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleRevokeAccess}>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="revoke-email" className="text-right">
+                                    Email
+                                </Label>
+                                <Input id="revoke-email" name="email" type="email" placeholder="jane@example.com" className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button type="submit" variant="destructive">
+                                Revoke Access
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isAddOpen} onOpenChange={(open) => {
+                setIsAddOpen(open);
+                if (!open) setEditingEmployee(null);
+            }}>
+            <DialogTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90 text-black font-bold w-full sm:w-auto" onClick={openAddDialog}>
+                <Plus className="mr-2 h-4 w-4" /> Add Employee
+                </Button>
+            </DialogTrigger>
           <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
             <DialogHeader>
               <DialogTitle>{editingEmployee ? "Edit Employee" : "Add New Employee"}</DialogTitle>
@@ -264,6 +383,7 @@ export default function EmployeesPage() {
           </DialogContent>
         </Dialog>
       </div>
+    </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center h-64">

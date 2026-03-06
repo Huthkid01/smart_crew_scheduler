@@ -110,7 +110,9 @@ export default function LandingPage() {
                     <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Basic scheduling</li>
                     <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> 1 week history</li>
                 </ul>
-                <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white">Get Started</Button>
+                <Link to="/signup" className="mt-auto w-full">
+                    <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white">Get Started</Button>
+                </Link>
              </div>
              
              {/* Pro Plan */}
@@ -125,7 +127,9 @@ export default function LandingPage() {
                     <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Time tracking</li>
                     <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Advanced reporting</li>
                 </ul>
-                <Button className="w-full bg-primary hover:bg-primary/90 text-black font-bold">Try Pro Free</Button>
+                <Link to="/signup" className="mt-auto w-full">
+                    <Button className="w-full bg-primary hover:bg-primary/90 text-black font-bold">Try Pro Free</Button>
+                </Link>
              </div>
 
              {/* Enterprise Plan */}
@@ -139,7 +143,9 @@ export default function LandingPage() {
                     <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Dedicated support</li>
                     <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> SLA & Security</li>
                 </ul>
-                <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white">Contact Sales</Button>
+                <Link to="mailto:odusanyauthman2019@gmail.com" className="mt-auto w-full">
+                    <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white">Contact Sales</Button>
+                </Link>
              </div>
           </div>
         </div>

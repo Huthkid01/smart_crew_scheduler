@@ -36,14 +36,14 @@ export function Navbar() {
           </button>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <Link to="/login">
-            <Button variant="ghost" className="text-gray-300 hover:text-white hover:bg-white/10">
+            <Button variant="ghost" className="text-gray-300 hover:text-white hover:bg-white/10 h-8 px-3 text-xs md:h-10 md:px-4 md:text-sm">
               Sign In
             </Button>
           </Link>
           <Link to="/signup">
-            <Button className="bg-primary hover:bg-primary/90 text-black font-semibold">
+            <Button className="bg-primary hover:bg-primary/90 text-black font-semibold h-8 px-3 text-xs md:h-10 md:px-4 md:text-sm">
               Get Started
             </Button>
           </Link>

@@ -48,7 +48,7 @@ export function DashboardLayout() {
             </div>
             <span className="font-bold text-lg">SmartCrew</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(true)}>
+        <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
           <Menu className="h-6 w-6" />
         </Button>
       </div>

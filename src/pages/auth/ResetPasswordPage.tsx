@@ -48,14 +48,25 @@ export default function ResetPasswordPage() {
     setError(null);
 
     try {
+      // 1. Update Password
       const { error: updateError } = await supabase.auth.updateUser({
         password: data.password,
       });
 
       if (updateError) throw updateError;
+
+      // 2. Update Employee Invite Status (if this was an invitation)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+          // Attempt to update invite status, ignore error if user is not in employees table
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase.from('employees') as any)
+            .update({ invite_status: 'active' })
+            .eq('user_id', user.id);
+      }
       
       setSuccess(true);
-      setTimeout(() => navigate('/login'), 3000);
+      setTimeout(() => navigate('/dashboard'), 2000); // Redirect directly to dashboard
     } catch (err: unknown) {
       console.error(err);
       const errorMessage = err instanceof Error ? err.message : "Failed to update password";

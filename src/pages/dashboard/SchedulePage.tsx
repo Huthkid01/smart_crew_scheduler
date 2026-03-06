@@ -4,7 +4,7 @@ import type { View } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Plus, ChevronLeft, ChevronRight, Loader2, Send } from "lucide-react";
+import { Sparkles, Plus, ChevronLeft, ChevronRight, Loader2, Send, Trash2 } from "lucide-react";
 import { supabase } from "@/supabase/client";
 import { parseISO } from "date-fns";
 // import type { Database } from "@/supabase/types";
@@ -45,7 +45,12 @@ interface CalendarEvent {
   start: Date;
   end: Date;
   resourceId?: string;
+  status: 'draft' | 'published';
+  employeeId: string;
 }
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { toast } from "sonner";
 
 export default function SchedulePage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -53,14 +58,43 @@ export default function SchedulePage() {
   const [date, setDate] = useState(new Date());
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isAddShiftOpen, setIsAddShiftOpen] = useState(false);
+  const [isEditShiftOpen, setIsEditShiftOpen] = useState(false);
+  const [selectedShift, setSelectedShift] = useState<CalendarEvent | null>(null);
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [isRoleLoading, setIsRoleLoading] = useState(true);
 
   useEffect(() => {
-    fetchShifts();
+    fetchUserRole();
     fetchEmployees();
   }, []);
+
+  useEffect(() => {
+    if (userRole) {
+        fetchShifts();
+    }
+  }, [userRole]);
+
+  async function fetchUserRole() {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+        const { data } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setUserRole((data as any)?.role || 'employee');
+        }
+    } catch (error) {
+        console.error("Error fetching role:", error);
+    } finally {
+        setIsRoleLoading(false);
+    }
+  }
 
   async function fetchEmployees() {
     try {
@@ -113,7 +147,7 @@ export default function SchedulePage() {
             date: formData.get("date") as string,
             start_time: formData.get("start_time") as string,
             end_time: formData.get("end_time") as string,
-            status: 'published'
+            status: 'draft' // Default to draft for safety
         };
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,10 +158,10 @@ export default function SchedulePage() {
 
         setIsAddShiftOpen(false);
         fetchShifts();
-        alert("Shift added successfully!");
+        toast.success("Shift added to drafts!");
     } catch (error) {
         console.error("Error adding shift:", error);
-        alert("Failed to add shift");
+        toast.error("Failed to add shift");
     }
   }
 
@@ -140,6 +174,7 @@ export default function SchedulePage() {
           date,
           start_time,
           end_time,
+          status,
           employees (
             id,
             name,
@@ -149,9 +184,15 @@ export default function SchedulePage() {
 
       if (error) throw error;
 
-      const formattedEvents = (shifts || []).map(shift => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const s = shift as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let filteredShifts = (shifts || []) as any[];
+
+      // Employees only see published shifts
+      if (userRole === 'employee') {
+        filteredShifts = filteredShifts.filter(s => s.status === 'published');
+      }
+
+      const formattedEvents = filteredShifts.map(s => {
         // Combine date and time
         const startDateTime = parseISO(`${s.date}T${s.start_time}`);
         const endDateTime = parseISO(`${s.date}T${s.end_time}`);
@@ -161,10 +202,12 @@ export default function SchedulePage() {
 
         return {
           id: s.id,
-          title: `${employeeName} - ${position}`,
+          title: `${employeeName} - ${position} ${s.status === 'draft' ? '(Draft)' : ''}`,
           start: startDateTime,
           end: endDateTime,
           resourceId: s.employees?.id,
+          status: s.status,
+          employeeId: s.employees?.id,
         };
       });
 
@@ -194,10 +237,6 @@ export default function SchedulePage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("No user found");
-        
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) throw new Error("No active session");
 
         const { data: profile } = await supabase
             .from('profiles')
@@ -210,23 +249,149 @@ export default function SchedulePage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const orgId = (profile as any).org_id;
 
-        const { data, error } = await supabase.functions.invoke('generate-schedule', {
-            body: {
-                org_id: orgId,
-                start_date: startDate,
-                end_date: endDate,
-                optimization_goal: goal
-            },
-            headers: {
-                Authorization: `Bearer ${session?.access_token}`
-            }
-        });
+        // --- Client-Side AI Logic Start ---
+        
+        // 1. Fetch employees and their availability
+        const { data: employeesData, error: empError } = await supabase
+          .from('employees')
+          .select(`
+            *,
+            employee_skills (
+              skill_id,
+              proficiency_level,
+              skills (name)
+            ),
+            availability (*)
+          `)
+          .eq('org_id', orgId)
+          .eq('is_active', true);
 
-        if (error) throw error;
+        if (empError) throw empError;
+
+        // 2. Fetch existing shifts
+        const { error: shiftError } = await supabase
+            .from('shifts')
+            .select('*')
+            .eq('org_id', orgId)
+            .gte('date', startDate)
+            .lte('date', endDate);
+        
+        if (shiftError) throw shiftError;
+
+        // 3. Construct prompt
+        const prompt = `
+          You are an expert scheduler. Generate an optimal work schedule for the following employees from ${startDate} to ${endDate}.
+          
+          Optimization Goal: ${goal}
+          
+          Employees:
+          ${JSON.stringify(employeesData, null, 2)}
+          
+          Constraints:
+          - Respect employee availability.
+          - Ensure required skills are covered (assume generic requirement if not specified).
+          - Do not schedule employees for more than 40 hours a week unless necessary.
+          - Shifts should be between 4-8 hours.
+          
+          Return the schedule as a JSON array of objects with the following structure:
+          [
+            {
+              "employee_id": 123,
+              "date": "YYYY-MM-DD",
+              "start_time": "HH:MM",
+              "end_time": "HH:MM",
+              "role": "Position Name"
+            }
+          ]
+          Do not include any explanation, just the JSON.
+        `;
+
+        // 4. Call Gemini API using the official SDK
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        if (!apiKey) {
+            throw new Error("VITE_GEMINI_API_KEY is not set in your .env file.");
+        }
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        
+        // Helper to try multiple models and fallbacks
+        const generateWithFallback = async (promptText: string) => {
+            const modelsToTry = [
+                "gemini-1.5-flash", 
+                "gemini-1.5-flash-latest", 
+                "gemini-1.5-pro", 
+                "gemini-1.0-pro", 
+                "gemini-pro"
+            ];
+            
+            // 1. Try SDK with various model names
+            for (const modelName of modelsToTry) {
+                try {
+                    console.log(`Attempting to generate with SDK model: ${modelName}`);
+                    const model = genAI.getGenerativeModel({ model: modelName });
+                    const result = await model.generateContent(promptText);
+                    const response = await result.response;
+                    return response.text();
+                } catch (error) {
+                    console.warn(`SDK Model ${modelName} failed:`, error);
+                    // Continue to next model
+                }
+            }
+
+            // 2. Fallback to direct REST API (v1beta) if SDK fails
+            console.log("SDK failed, attempting direct REST API fallback...");
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: promptText
+                            }]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(`REST API Error: ${data.error.message}`);
+                }
+
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            } catch (restError) {
+                console.error("REST API fallback failed:", restError);
+            }
+
+            throw new Error("All AI attempts failed. Please verify your API Key has 'Generative Language API' enabled in Google Cloud Console.");
+        };
+
+        const textResponse = await generateWithFallback(prompt);
+        
+        // Extract JSON from response
+        const jsonMatch = textResponse.match(/\[[\s\S]*\]/);
+        let generatedSchedule = [];
+        
+        if (jsonMatch) {
+            try {
+                generatedSchedule = JSON.parse(jsonMatch[0]);
+            } catch (e) {
+                console.error("Failed to parse JSON from AI response:", textResponse, e);
+                throw new Error("AI returned invalid JSON format.");
+            }
+        } else {
+             console.error("Failed to find JSON in AI response:", textResponse);
+             throw new Error("AI did not return a valid schedule.");
+        }
+
+        // --- Client-Side AI Logic End ---
 
         // The AI returns a list of shifts. We need to save them to the database.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const shiftsToInsert = data.map((shift: any) => ({
+        const shiftsToInsert = generatedSchedule.map((shift: any) => ({
             org_id: orgId,
             employee_id: shift.employee_id,
             date: shift.date,
@@ -243,16 +408,17 @@ export default function SchedulePage() {
             
             if (insertError) throw insertError;
             
-            alert(`Successfully generated and saved ${shiftsToInsert.length} shifts!`);
+            toast.success(`Successfully generated and saved ${shiftsToInsert.length} shifts!`);
             fetchShifts(); // Refresh calendar
             setIsAiModalOpen(false);
         } else {
-            alert("AI could not generate any shifts for this criteria.");
+            toast.warning("AI could not generate any shifts for this criteria.");
         }
 
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
         console.error("Error generating schedule:", error);
-        alert("Failed to generate schedule. Please try again.");
+        toast.error(`Failed to generate schedule: ${errorMessage}`);
       } finally {
         setIsLoading(false);
       }
@@ -312,6 +478,61 @@ export default function SchedulePage() {
                     <SelectItem value={Views.AGENDA}>Agenda</SelectItem>
                 </SelectContent>
             </Select>
+            <Dialog open={isEditShiftOpen} onOpenChange={setIsEditShiftOpen}>
+                <DialogContent className="bg-zinc-900 border-zinc-800 text-white top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] fixed w-[90vw] max-w-[425px] max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Shift</DialogTitle>
+                        <DialogDescription className="text-zinc-400">
+                            Update or delete this shift.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleUpdateShift}>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="edit-employee" className="text-right">
+                                Employee
+                                </Label>
+                                <div className="col-span-3">
+                                    <Select name="employee" defaultValue={selectedShift?.employeeId}>
+                                        <SelectTrigger className="bg-zinc-950 border-zinc-800">
+                                            <SelectValue placeholder="Select employee" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
+                                            {employees.map((emp) => (
+                                                <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="edit-date" className="text-right">
+                                Date
+                                </Label>
+                                <Input id="edit-date" name="date" type="date" defaultValue={selectedShift ? moment(selectedShift.start).format('YYYY-MM-DD') : ''} className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="edit-start_time" className="text-right">
+                                Start
+                                </Label>
+                                <Input id="edit-start_time" name="start_time" type="time" defaultValue={selectedShift ? moment(selectedShift.start).format('HH:mm') : ''} className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="edit-end_time" className="text-right">
+                                End
+                                </Label>
+                                <Input id="edit-end_time" name="end_time" type="time" defaultValue={selectedShift ? moment(selectedShift.end).format('HH:mm') : ''} className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                            </div>
+                        </div>
+                        <DialogFooter className="flex gap-2 sm:justify-between">
+                            <Button type="button" variant="destructive" onClick={handleDeleteShift} className="bg-red-900/20 text-red-500 hover:bg-red-900/40">
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </Button>
+                            <Button type="submit" className="bg-primary text-black hover:bg-primary/90">Update Shift</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
       </div>
     );
@@ -342,16 +563,75 @@ export default function SchedulePage() {
 
             if (error) throw error;
             
-            alert("All draft shifts have been published!");
+            toast.success("All draft shifts have been published!");
             fetchShifts();
         }
     } catch (error) {
         console.error("Error publishing shifts:", error);
-        alert("Failed to publish shifts.");
+        toast.error("Failed to publish shifts.");
     } finally {
         setIsPublishing(false);
     }
   }
+
+  const handleEventClick = (event: CalendarEvent) => {
+    // Only allow editing if not an employee
+    if (userRole === 'employee') return;
+    
+    setSelectedShift(event);
+    setIsEditShiftOpen(true);
+  };
+
+  const handleDeleteShift = async () => {
+    if (!selectedShift) return;
+    if (!confirm("Are you sure you want to delete this shift?")) return;
+
+    try {
+        const { error } = await supabase
+            .from('shifts')
+            .delete()
+            .eq('id', selectedShift.id);
+
+        if (error) throw error;
+
+        toast.success("Shift deleted successfully");
+        setIsEditShiftOpen(false);
+        fetchShifts();
+    } catch (error) {
+        console.error("Error deleting shift:", error);
+        toast.error("Failed to delete shift");
+    }
+  };
+
+  const handleUpdateShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedShift) return;
+
+    const formData = new FormData(e.target as HTMLFormElement);
+    
+    try {
+        const updates = {
+            employee_id: formData.get("employee") as string,
+            date: formData.get("date") as string,
+            start_time: formData.get("start_time") as string,
+            end_time: formData.get("end_time") as string,
+        };
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase.from('shifts') as any)
+            .update(updates)
+            .eq('id', selectedShift.id);
+
+        if (error) throw error;
+
+        toast.success("Shift updated successfully");
+        setIsEditShiftOpen(false);
+        fetchShifts();
+    } catch (error) {
+        console.error("Error updating shift:", error);
+        toast.error("Failed to update shift");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -361,134 +641,138 @@ export default function SchedulePage() {
             <p className="text-zinc-400">Manage shifts and staffing.</p>
         </div>
         <div className="flex flex-wrap justify-center gap-2">
-            <Button 
-                variant="outline" 
-                className="bg-zinc-800 hover:bg-zinc-700 transition-colors text-white hover:text-white border-zinc-700"
-                onClick={handlePublish}
-                disabled={isPublishing}
-            >
-                {isPublishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                Publish Schedule
-            </Button>
-            <Dialog open={isAiModalOpen} onOpenChange={setIsAiModalOpen}>
-                <DialogTrigger asChild>
-                    <Button className="bg-primary text-black hover:bg-primary/90 hover:text-black font-bold gap-2">
-                        <Sparkles className="h-4 w-4" />
-                        AI Scheduler
+            {!isRoleLoading && userRole !== 'employee' && (
+                <>
+                    <Button 
+                        variant="outline" 
+                        className="bg-zinc-800 hover:bg-zinc-700 transition-colors text-white hover:text-white border-zinc-700"
+                        onClick={handlePublish}
+                        disabled={isPublishing}
+                    >
+                        {isPublishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Publish Schedule
                     </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-zinc-900 border-zinc-800 text-white sm:max-w-[425px] relative overflow-hidden">
-                    <DialogHeader>
-                        <DialogTitle>AI Scheduling Assistant</DialogTitle>
-                        <DialogDescription className="text-zinc-400">
-                            Automatically generate an optimal schedule based on availability and skills.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleGenerateSchedule}>
-                        <div className="grid gap-4 py-4">
-                            {isLoading && (
-                                <div className="absolute inset-0 bg-zinc-950/90 flex flex-col items-center justify-center z-50 rounded-lg">
-                                    <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-                                    <p className="text-white font-medium">Generating Schedule...</p>
-                                    <p className="text-zinc-400 text-sm mt-2">This may take 10-20 seconds.</p>
-                                </div>
-                            )}
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="date-range" className="text-right">
-                                Date Range
-                                </Label>
-                                <div className="col-span-3 flex gap-2">
-                                    <Input name="start_date" type="date" className="bg-zinc-950 border-zinc-800" required />
-                                    <span className="self-center">-</span>
-                                    <Input name="end_date" type="date" className="bg-zinc-950 border-zinc-800" required />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="goal" className="text-right">
-                                Goal
-                                </Label>
-                                <div className="col-span-3">
-                                    <Select name="goal" defaultValue="balance">
-                                        <SelectTrigger className="bg-zinc-950 border-zinc-800">
-                                            <SelectValue placeholder="Select optimization goal" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
-                                            <SelectItem value="minimize_cost">Minimize Cost</SelectItem>
-                                            <SelectItem value="maximize_coverage">Maximize Coverage</SelectItem>
-                                            <SelectItem value="balance">Balance Both</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button type="submit" className="bg-primary text-black hover:bg-primary/90 w-full" disabled={isLoading}>
-                                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} 
-                                Generate Schedule
+                    <Dialog open={isAiModalOpen} onOpenChange={setIsAiModalOpen}>
+                        <DialogTrigger asChild>
+                            <Button className="bg-primary text-black hover:bg-primary/90 hover:text-black font-bold gap-2">
+                                <Sparkles className="h-4 w-4" />
+                                AI Scheduler
                             </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={isAddShiftOpen} onOpenChange={setIsAddShiftOpen}>
-                <DialogTrigger asChild>
-                    <Button variant="outline" className="bg-zinc-800 hover:bg-zinc-700 transition-colors border-zinc-700 text-white hover:text-white gap-2">
-                        <Plus className="h-4 w-4" />
-                        Add Shift
-                    </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
-                    <DialogHeader>
-                        <DialogTitle>Add New Shift</DialogTitle>
-                        <DialogDescription className="text-zinc-400">
-                            Schedule a new shift for an employee.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleAddShift}>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="employee" className="text-right">
-                                Employee
-                                </Label>
-                                <div className="col-span-3">
-                                    <Select name="employee" required>
-                                        <SelectTrigger className="bg-zinc-950 border-zinc-800">
-                                            <SelectValue placeholder="Select employee" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
-                                            {employees.map((emp) => (
-                                                <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                        </DialogTrigger>
+                        <DialogContent className="bg-zinc-900 border-zinc-800 text-white sm:max-w-[425px] fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] w-[90vw] max-h-[85vh] overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>AI Scheduling Assistant</DialogTitle>
+                                <DialogDescription className="text-zinc-400">
+                                    Automatically generate an optimal schedule based on availability and skills.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleGenerateSchedule}>
+                                <div className="grid gap-4 py-4">
+                                    {isLoading && (
+                                        <div className="absolute inset-0 bg-zinc-950/90 flex flex-col items-center justify-center z-50 rounded-lg">
+                                            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+                                            <p className="text-white font-medium">Generating Schedule...</p>
+                                            <p className="text-zinc-400 text-sm mt-2">This may take 10-20 seconds.</p>
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="date-range" className="text-right">
+                                        Date Range
+                                        </Label>
+                                        <div className="col-span-3 flex gap-2">
+                                            <Input name="start_date" type="date" className="bg-zinc-950 border-zinc-800" required />
+                                            <span className="self-center">-</span>
+                                            <Input name="end_date" type="date" className="bg-zinc-950 border-zinc-800" required />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="goal" className="text-right">
+                                        Goal
+                                        </Label>
+                                        <div className="col-span-3">
+                                            <Select name="goal" defaultValue="balance">
+                                                <SelectTrigger className="bg-zinc-950 border-zinc-800">
+                                                    <SelectValue placeholder="Select optimization goal" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
+                                                    <SelectItem value="minimize_cost">Minimize Cost</SelectItem>
+                                                    <SelectItem value="maximize_coverage">Maximize Coverage</SelectItem>
+                                                    <SelectItem value="balance">Balance Both</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="date" className="text-right">
-                                Date
-                                </Label>
-                                <Input id="date" name="date" type="date" className="col-span-3 bg-zinc-950 border-zinc-800" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="start_time" className="text-right">
-                                Start
-                                </Label>
-                                <Input id="start_time" name="start_time" type="time" className="col-span-3 bg-zinc-950 border-zinc-800" required />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="end_time" className="text-right">
-                                End
-                                </Label>
-                                <Input id="end_time" name="end_time" type="time" className="col-span-3 bg-zinc-950 border-zinc-800" required />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button type="submit" className="bg-primary text-black hover:bg-primary/90">Add Shift</Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
+                                <DialogFooter>
+                                    <Button type="submit" className="bg-primary text-black hover:bg-primary/90 w-full" disabled={isLoading}>
+                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} 
+                                        Generate Schedule
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={isAddShiftOpen} onOpenChange={setIsAddShiftOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" className="bg-zinc-800 hover:bg-zinc-700 transition-colors border-zinc-700 text-white hover:text-white gap-2">
+                                <Plus className="h-4 w-4" />
+                                Add Shift
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="bg-zinc-900 border-zinc-800 text-white fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] w-[90vw] max-h-[85vh] overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>Add New Shift</DialogTitle>
+                                <DialogDescription className="text-zinc-400">
+                                    Schedule a new shift for an employee.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleAddShift}>
+                                <div className="grid gap-4 py-4">
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="employee" className="text-right">
+                                        Employee
+                                        </Label>
+                                        <div className="col-span-3">
+                                            <Select name="employee" required>
+                                                <SelectTrigger className="bg-zinc-950 border-zinc-800">
+                                                    <SelectValue placeholder="Select employee" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
+                                                    {employees.map((emp) => (
+                                                        <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="date" className="text-right">
+                                        Date
+                                        </Label>
+                                        <Input id="date" name="date" type="date" className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="start_time" className="text-right">
+                                        Start
+                                        </Label>
+                                        <Input id="start_time" name="start_time" type="time" className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="end_time" className="text-right">
+                                        End
+                                        </Label>
+                                        <Input id="end_time" name="end_time" type="time" className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button type="submit" className="bg-primary text-black hover:bg-primary/90">Add Shift</Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                </>
+            )}
         </div>
       </div>
 
@@ -506,9 +790,13 @@ export default function SchedulePage() {
             components={{
                 toolbar: CustomToolbar
             }}
-            eventPropGetter={() => ({
-                className: "bg-zinc-800 border-l-4 border-primary text-white text-xs p-1 rounded-r-md overflow-hidden"
-            })}
+            eventPropGetter={(event) => {
+                const isDraft = event.status === 'draft';
+                return {
+                    className: `${isDraft ? 'bg-zinc-800 border-zinc-500 text-zinc-400 border-l-4 border-dashed' : 'bg-zinc-800 border-l-4 border-primary text-white'} text-xs p-1 rounded-r-md overflow-hidden cursor-pointer hover:brightness-110 transition-all`
+                };
+            }}
+            onSelectEvent={handleEventClick}
         />
       </div>
     </div>
