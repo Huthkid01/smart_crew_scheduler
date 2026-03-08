@@ -49,7 +49,6 @@ interface CalendarEvent {
   employeeId: string;
 }
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { toast } from "sonner";
 
 export default function SchedulePage() {
@@ -75,6 +74,7 @@ export default function SchedulePage() {
     if (userRole) {
         fetchShifts();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
 
   async function fetchUserRole() {
@@ -306,70 +306,48 @@ export default function SchedulePage() {
           Do not include any explanation, just the JSON.
         `;
 
-        // 4. Call Gemini API using the official SDK
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        // 4. Call Groq API (replacing Gemini)
+        const apiKey = import.meta.env.VITE_GROQ_API_KEY;
         if (!apiKey) {
-            throw new Error("VITE_GEMINI_API_KEY is not set in your .env file.");
+            throw new Error("VITE_GROQ_API_KEY is not set in your .env file.");
         }
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-        
-        // Helper to try multiple models and fallbacks
-        const generateWithFallback = async (promptText: string) => {
-            const modelsToTry = [
-                "gemini-1.5-flash", 
-                "gemini-1.5-flash-latest", 
-                "gemini-1.5-pro", 
-                "gemini-1.0-pro", 
-                "gemini-pro"
-            ];
-            
-            // 1. Try SDK with various model names
-            for (const modelName of modelsToTry) {
-                try {
-                    console.log(`Attempting to generate with SDK model: ${modelName}`);
-                    const model = genAI.getGenerativeModel({ model: modelName });
-                    const result = await model.generateContent(promptText);
-                    const response = await result.response;
-                    return response.text();
-                } catch (error) {
-                    console.warn(`SDK Model ${modelName} failed:`, error);
-                    // Continue to next model
-                }
-            }
-
-            // 2. Fallback to direct REST API (v1beta) if SDK fails
-            console.log("SDK failed, attempting direct REST API fallback...");
+        const generateWithGroq = async (promptText: string) => {
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                    method: 'POST',
+                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                    method: "POST",
                     headers: {
-                        'Content-Type': 'application/json',
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`
                     },
                     body: JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: promptText
-                            }]
-                        }]
+                        messages: [
+                            {
+                                role: "user",
+                                content: promptText
+                            }
+                        ],
+                        model: "llama-3.3-70b-versatile",
+                        temperature: 0.5,
+                        max_tokens: 4096,
+                        response_format: { type: "json_object" }
                     })
                 });
 
                 const data = await response.json();
                 
                 if (data.error) {
-                    throw new Error(`REST API Error: ${data.error.message}`);
+                    throw new Error(`Groq API Error: ${data.error.message}`);
                 }
 
-                return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            } catch (restError) {
-                console.error("REST API fallback failed:", restError);
+                return data.choices?.[0]?.message?.content || "";
+            } catch (error) {
+                console.error("Groq API call failed:", error);
+                throw error;
             }
-
-            throw new Error("All AI attempts failed. Please verify your API Key has 'Generative Language API' enabled in Google Cloud Console.");
         };
 
-        const textResponse = await generateWithFallback(prompt);
+        const textResponse = await generateWithGroq(prompt);
         
         // Extract JSON from response
         const jsonMatch = textResponse.match(/\[[\s\S]*\]/);

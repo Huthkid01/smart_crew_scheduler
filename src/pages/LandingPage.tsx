@@ -79,11 +79,6 @@ export default function LandingPage() {
               description="Seamless clock-in/out and timesheet management for accurate payroll."
             />
             <FeatureCard 
-              icon={<Zap className="h-8 w-8 text-primary" />}
-              title="Instant Notifications"
-              description="Keep everyone in the loop with automated SMS and email alerts for shift changes."
-            />
-            <FeatureCard 
               icon={<CheckCircle2 className="h-8 w-8 text-primary" />}
               title="Labor Compliance"
               description="Automatically flag overtime and break violations before they happen."

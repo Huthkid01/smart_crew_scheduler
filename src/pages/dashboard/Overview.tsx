@@ -34,6 +34,8 @@ export default function Overview() {
     laborCost: 0,
     pendingRequests: 0,
   });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [activeEmployees, setActiveEmployees] = useState<any[]>([]);
   const [upcomingShifts, setUpcomingShifts] = useState<UpcomingShift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -74,6 +76,22 @@ export default function Overview() {
           .gte('date', startStr)
           .lte('date', endStr);
 
+        // 4. Live Attendance
+        const { data: activeData } = await supabase
+          .from('time_entries')
+          .select(`
+            id,
+            clock_in,
+            employees (
+              name,
+              position
+            )
+          `)
+          .is('clock_out', null)
+          .order('clock_in', { ascending: false });
+
+        setActiveEmployees(activeData || []);
+        
         let totalCost = 0;
         if (shiftsData) {
           (shiftsData as unknown as ShiftWithCost[]).forEach((shift) => {
@@ -234,33 +252,75 @@ export default function Overview() {
           </CardContent>
         </Card>
         
-        <Card className="col-span-1 lg:col-span-3 bg-zinc-900 border-zinc-800 text-white">
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-             <div className="space-y-2">
-                <button 
-                    onClick={() => navigate('/dashboard/schedule')}
-                    className="w-full text-left px-4 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 transition-colors text-sm"
-                >
-                    + Create New Shift
-                </button>
-                <button 
-                    onClick={() => navigate('/dashboard/employees')}
-                    className="w-full text-left px-4 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 transition-colors text-sm"
-                >
-                    + Add Employee
-                </button>
-                <button 
-                    onClick={() => navigate('/dashboard/availability')}
-                    className="w-full text-left px-4 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 transition-colors text-sm"
-                >
-                    Review Time Off Requests
-                </button>
-             </div>
-          </CardContent>
-        </Card>
+        <div className="col-span-1 lg:col-span-3 space-y-4">
+            <Card className="bg-zinc-900 border-zinc-800 text-white">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                        </span>
+                        Live Attendance
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                        {activeEmployees.length === 0 ? (
+                            <p className="text-zinc-500 text-sm">No one is currently clocked in.</p>
+                        ) : (
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            activeEmployees.map((entry: any) => (
+                                <div key={entry.id} className="flex items-center justify-between border-b border-zinc-800 pb-2 last:border-0">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-full bg-green-900/30 flex items-center justify-center text-green-500 font-bold text-xs">
+                                            {entry.employees?.name.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-sm">{entry.employees?.name}</p>
+                                            <p className="text-xs text-zinc-400">{entry.employees?.position}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xs text-green-400 font-medium">Clocked In</p>
+                                        <p className="text-xs text-zinc-500">
+                                            {format(new Date(entry.clock_in), 'h:mm a')}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="bg-zinc-900 border-zinc-800 text-white">
+            <CardHeader>
+                <CardTitle>Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-2">
+                    <button 
+                        onClick={() => navigate('/dashboard/schedule')}
+                        className="w-full text-left px-4 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 transition-colors text-sm"
+                    >
+                        + Create New Shift
+                    </button>
+                    <button 
+                        onClick={() => navigate('/dashboard/employees')}
+                        className="w-full text-left px-4 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 transition-colors text-sm"
+                    >
+                        + Add Employee
+                    </button>
+                    <button 
+                        onClick={() => navigate('/dashboard/reports')}
+                        className="w-full text-left px-4 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 transition-colors text-sm"
+                    >
+                        View Reports
+                    </button>
+                </div>
+            </CardContent>
+            </Card>
+        </div>
       </div>
     </div>
   );

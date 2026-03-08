@@ -1,72 +1,82 @@
 # SmartCrew Scheduler
 
-A complete AI-powered business automation tool for employee scheduling and management.
+An AI-powered workforce management and scheduling platform designed for modern teams. Streamline operations with automated scheduling, real-time time tracking, and comprehensive team management.
 
-## Tech Stack
+## 🚀 Key Features
 
-- **Frontend:** React, Vite, TypeScript, Tailwind CSS, shadcn/ui
-- **Backend:** Supabase (Auth, Database, Edge Functions)
-- **AI Integration:** Google Gemini API (via Supabase Edge Functions)
-- **Deployment:** Ready for Vercel
+### 📅 AI-Powered Scheduling
+*   **Automated Schedule Generation:** Uses Google Gemini AI to create optimized schedules in seconds based on employee availability and skills.
+*   **Smart Calendar:** Interactive drag-and-drop calendar for manual adjustments.
+*   **Conflict Detection:** Automatically avoids scheduling employees during their time off or double-booking.
+*   **Publishing Workflow:** Create drafts and publish schedules only when they are ready.
 
-## Features
+### 👥 Team Management
+*   **Centralized Database:** Manage employee profiles, contact info, and roles.
+*   **Skill Tracking:** Tag employees with specific skills (e.g., "Bartender", "Manager") for better shift assignment.
+*   **Invite System:** Easily invite new team members via email.
+*   **Access Control:** Revoke login access for terminated employees instantly.
 
-- **User System:** Role-based access (Admin, Manager, Employee), Profile management.
-- **Dashboard:** Overview with key metrics, specialized views for different roles.
-- **Employee Management:** Add, edit, filter employees; track skills and rates.
-- **Schedule Management:** Interactive calendar, shift assignment, conflict detection.
-- **AI Scheduling Assistant:** Generate optimal schedules based on availability, skills, and cost.
-- **Availability:** Weekly availability setting, time-off requests.
-- **Reports & Analytics:** Labor cost tracking, hours worked visualization.
+### ⏱️ Time Tracking & Attendance
+*   **Employee Clock In/Out:** Dedicated dashboard for employees to log their work hours in real-time.
+*   **Live Attendance Widget:** Admins can see who is currently working right from the main dashboard.
+*   **Time Logs:** Securely stores all clock-in and clock-out events for payroll accuracy.
 
-## Getting Started
+### 📊 Reports & Analytics
+*   **Labor Cost Estimation:** Real-time calculation of weekly labor costs based on hourly rates.
+*   **Hours Tracking:** Monitor total hours scheduled vs. actual hours worked.
+*   **Visual Insights:** Charts and graphs for weekly trends.
 
-1.  **Install dependencies:**
+### 📱 Employee Self-Service
+*   **Personal Dashboard:** Employees can view their own upcoming shifts and weekly hours.
+*   **Availability Management:** Employees can set their preferred working hours and time-off requests.
+*   **Profile Management:** Update personal contact details.
+
+## 🛠️ Technology Stack
+
+*   **Frontend:** React (Vite), TypeScript, Tailwind CSS, Shadcn UI
+*   **Backend / Database:** Supabase (PostgreSQL, Auth, Edge Functions)
+*   **AI Engine:** Google Gemini API
+*   **State Management:** React Hooks
+*   **Charts:** Recharts
+*   **Calendar:** React Big Calendar
+
+## 🚀 Getting Started
+
+### Prerequisites
+*   Node.js (v18+)
+*   npm or bun
+*   Supabase Account
+*   Google AI Studio API Key
+
+### Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-username/smart-crew-scheduler.git
+    cd smart-crew-scheduler
+    ```
+
+2.  **Install dependencies:**
     ```bash
     npm install
     ```
 
-2.  **Start the development server:**
+3.  **Configure Environment Variables:**
+    Create a `.env` file in the root directory:
+    ```env
+    VITE_SUPABASE_URL=your_supabase_url
+    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+    VITE_GROQ_API_KEY=your_groq_api_key
+    ```
+
+4.  **Run Development Server:**
     ```bash
     npm run dev
     ```
 
-3.  **Open the app:**
-    Navigate to the URL shown in the terminal (usually `http://localhost:5173`).
+### Database Setup
+Run the SQL migrations provided in `supabase/migrations` to set up your tables and Row Level Security (RLS) policies.
 
-## Supabase Setup
+## 📝 License
 
-1.  Create a new Supabase project.
-2.  Run the SQL script located in `supabase/schema.sql` in your Supabase SQL Editor to create tables and policies.
-3.  Copy your Supabase URL and Anon Key to a `.env` file (see `.env.example` if available, or just create one):
-    ```env
-    VITE_SUPABASE_URL=your_supabase_url
-    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-    ```
-
-## AI Integration (Edge Function)
-
-The AI scheduling logic resides in a Supabase Edge Function.
-
-1.  **Deploy the function:**
-    ```bash
-    supabase functions deploy generate-schedule
-    ```
-
-2.  **Set Secrets:**
-    You need to set the `GOOGLE_API_KEY` secret for the function to access Gemini API.
-    ```bash
-    supabase secrets set GOOGLE_API_KEY=your_gemini_api_key
-    ```
-
-3.  **Usage:**
-    The frontend calls this function when you click "Generate Schedule" in the Schedule page.
-
-## Project Structure
-
-- `src/components`: Reusable UI components (shadcn/ui).
-- `src/pages`: Application pages (Landing, Auth, Dashboard).
-- `src/lib`: Utility functions and Supabase client.
-- `src/supabase`: Database types.
-- `supabase/functions`: Edge Functions.
-- `supabase/schema.sql`: Database schema.
+This project is licensed under the MIT License.

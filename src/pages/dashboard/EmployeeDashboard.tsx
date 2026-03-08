@@ -5,6 +5,9 @@ import { supabase } from "@/supabase/client";
 import { format, parse, isToday, isTomorrow, startOfWeek, endOfWeek, differenceInMinutes } from "date-fns";
 import { useNavigate } from "react-router-dom";
 
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+
 interface MyShift {
   id: string;
   date: string;
@@ -20,6 +23,9 @@ export default function EmployeeDashboard() {
   const [weeklyHours, setWeeklyHours] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [userName, setUserName] = useState("");
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [isClockedIn, setIsClockedIn] = useState(false);
+  const [currentEntryId, setCurrentEntryId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchMyData() {
@@ -45,8 +51,22 @@ export default function EmployeeDashboard() {
 
         if (employee) {
             setUserName(employee.name);
+            setEmployeeId(employee.id);
 
             console.log("Employee found:", employee);
+
+            // 4. Check Clock Status
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: openEntry } = await (supabase.from('time_entries') as any)
+                .select('id')
+                .eq('employee_id', employee.id)
+                .is('clock_out', null)
+                .single();
+            
+            if (openEntry) {
+                setIsClockedIn(true);
+                setCurrentEntryId(openEntry.id);
+            }
 
             // 2. Get My Upcoming Shifts
             const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -103,6 +123,45 @@ export default function EmployeeDashboard() {
     fetchMyData();
   }, []);
 
+  const handleClockInOut = async () => {
+      if (!employeeId) return;
+
+      try {
+          if (isClockedIn) {
+              // Clock Out
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const { error } = await (supabase.from('time_entries') as any)
+                  .update({ clock_out: new Date().toISOString() })
+                  .eq('id', currentEntryId);
+              
+              if (error) throw error;
+              
+              setIsClockedIn(false);
+              setCurrentEntryId(null);
+              toast.success("Clocked Out Successfully");
+          } else {
+              // Clock In
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const { data, error } = await (supabase.from('time_entries') as any)
+                  .insert([{ 
+                      employee_id: employeeId,
+                      clock_in: new Date().toISOString()
+                  }])
+                  .select()
+                  .single();
+              
+              if (error) throw error;
+              
+              setIsClockedIn(true);
+              setCurrentEntryId(data.id);
+              toast.success("Clocked In Successfully");
+          }
+      } catch (error) {
+          console.error("Clock error:", error);
+          toast.error("Failed to update clock status");
+      }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full pt-20">
@@ -120,6 +179,32 @@ export default function EmployeeDashboard() {
             Hello, {userName.split(' ')[0]}! 👋
         </h1>
         <p className="text-zinc-400">Welcome to your dashboard.</p>
+      </div>
+
+      {/* Clock In/Out Section */}
+      <div className="w-full">
+        <Card className="border-zinc-800 bg-zinc-900">
+            <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-primary" /> Time Clock
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="text-zinc-400 flex items-center">
+                        Current Status: <span className={isClockedIn ? "text-green-500 font-bold ml-2" : "text-zinc-500 font-bold ml-2"}>
+                            {isClockedIn ? "Clocked In" : "Clocked Out"}
+                        </span>
+                    </div>
+                    <Button 
+                        onClick={handleClockInOut} 
+                        className={isClockedIn ? "bg-red-600 hover:bg-red-700 text-white font-bold w-full sm:w-auto" : "bg-green-600 hover:bg-green-700 text-white font-bold w-full sm:w-auto"}
+                    >
+                        {isClockedIn ? "Clock Out" : "Clock In"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
