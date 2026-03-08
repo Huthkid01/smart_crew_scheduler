@@ -39,6 +39,25 @@ export default function Overview() {
   const [upcomingShifts, setUpcomingShifts] = useState<UpcomingShift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const fetchAttendance = async () => {
+    // Fetch last 50 entries to avoid timezone issues
+    const { data: activeData } = await supabase
+      .from('time_entries')
+      .select(`
+        id,
+        clock_in,
+        clock_out,
+        employees (
+          name,
+          position
+        )
+      `)
+      .order('clock_in', { ascending: false })
+      .limit(50);
+
+    setActiveEmployees(activeData || []);
+  };
+
   useEffect(() => {
     async function fetchDashboardData() {
       setIsLoading(true);
@@ -76,21 +95,8 @@ export default function Overview() {
           .gte('date', startStr)
           .lte('date', endStr);
 
-        // 4. Live Attendance
-        const { data: activeData } = await supabase
-          .from('time_entries')
-          .select(`
-            id,
-            clock_in,
-            employees (
-              name,
-              position
-            )
-          `)
-          .is('clock_out', null)
-          .order('clock_in', { ascending: false });
-
-        setActiveEmployees(activeData || []);
+        // 4. Today's Attendance (Active + Completed)
+        await fetchAttendance();
         
         let totalCost = 0;
         if (shiftsData) {
@@ -162,6 +168,27 @@ export default function Overview() {
     }
 
     fetchDashboardData();
+
+    // Subscribe to realtime changes
+    const subscription = supabase
+      .channel('time_entries_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'time_entries',
+        },
+        () => {
+          console.log('Realtime update: fetching attendance...');
+          fetchAttendance();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (isLoading) {
@@ -266,25 +293,36 @@ export default function Overview() {
                 <CardContent>
                     <div className="space-y-4">
                         {activeEmployees.length === 0 ? (
-                            <p className="text-zinc-500 text-sm">No one is currently clocked in.</p>
+                            <p className="text-zinc-500 text-sm">No activity today.</p>
                         ) : (
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             activeEmployees.map((entry: any) => (
                                 <div key={entry.id} className="flex items-center justify-between border-b border-zinc-800 pb-2 last:border-0">
                                     <div className="flex items-center gap-3">
-                                        <div className="h-8 w-8 rounded-full bg-green-900/30 flex items-center justify-center text-green-500 font-bold text-xs">
+                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs ${entry.clock_out ? 'bg-zinc-800 text-zinc-400' : 'bg-green-900/30 text-green-500'}`}>
                                             {entry.employees?.name.charAt(0)}
                                         </div>
                                         <div>
-                                            <p className="font-medium text-sm">{entry.employees?.name}</p>
-                                            <p className="text-xs text-zinc-400">{entry.employees?.position}</p>
+                                            <p className={`font-medium text-sm ${entry.clock_out ? 'text-zinc-400' : 'text-white'}`}>{entry.employees?.name}</p>
+                                            <p className="text-xs text-zinc-500">{entry.employees?.position}</p>
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs text-green-400 font-medium">Clocked In</p>
-                                        <p className="text-xs text-zinc-500">
-                                            {format(new Date(entry.clock_in), 'h:mm a')}
-                                        </p>
+                                        {entry.clock_out ? (
+                                            <>
+                                                <p className="text-xs text-zinc-500 font-medium">Clocked Out</p>
+                                                <p className="text-xs text-zinc-600">
+                                                    {format(new Date(entry.clock_out), 'h:mm a')}
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-xs text-green-400 font-medium">Clocked In</p>
+                                                <p className="text-xs text-zinc-500">
+                                                    {format(new Date(entry.clock_in), 'h:mm a')}
+                                                </p>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             ))
