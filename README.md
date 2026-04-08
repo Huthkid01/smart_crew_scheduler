@@ -5,7 +5,7 @@ An AI-powered workforce management and scheduling platform designed for modern t
 ## 🚀 Key Features
 
 ### 📅 AI-Powered Scheduling
-*   **Automated Schedule Generation:** Uses Google Gemini AI to create optimized schedules in seconds based on employee availability and skills.
+*   **Automated Schedule Generation:** Uses Groq API keys to create optimized schedules in seconds based on employee availability and skills.
 *   **Smart Calendar:** Interactive drag-and-drop calendar for manual adjustments.
 *   **Conflict Detection:** Automatically avoids scheduling employees during their time off or double-booking.
 *   **Publishing Workflow:** Create drafts and publish schedules only when they are ready.
@@ -35,7 +35,7 @@ An AI-powered workforce management and scheduling platform designed for modern t
 
 *   **Frontend:** React (Vite), TypeScript, Tailwind CSS, Shadcn UI
 *   **Backend / Database:** Supabase (PostgreSQL, Auth, Edge Functions)
-*   **AI Engine:** Google Gemini API
+*   **AI Engine:** Groq API
 *   **State Management:** React Hooks
 *   **Charts:** Recharts
 *   **Calendar:** React Big Calendar
