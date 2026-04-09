@@ -1,9 +1,41 @@
-import React from 'react';
+import React from "react";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Bot, Calendar, CheckCircle2, Clock, Users, Zap } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+
+const FEATURE_ITEMS: { icon: LucideIcon; title: string; description: string }[] = [
+  {
+    icon: Bot,
+    title: "AI Scheduling",
+    description:
+      "Generate optimized schedules in one click based on availability, skills, and labor laws.",
+  },
+  {
+    icon: Calendar,
+    title: "Smart Calendar",
+    description:
+      "Interactive drag-and-drop calendar with real-time conflict detection and updates.",
+  },
+  {
+    icon: Users,
+    title: "Team Management",
+    description:
+      "Centralized employee profiles, skill tracking, and performance monitoring.",
+  },
+  {
+    icon: Clock,
+    title: "Time Tracking",
+    description: "Seamless clock-in/out and timesheet management for accurate payroll.",
+  },
+  {
+    icon: CheckCircle2,
+    title: "Labor Compliance",
+    description: "Automatically flag overtime and break violations before they happen.",
+  },
+];
 
 export default function LandingPage() {
   return (
@@ -57,32 +89,40 @@ export default function LandingPage() {
             <p className="text-gray-400">Streamline operations with our comprehensive suite of tools.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <FeatureCard 
-              icon={<Bot className="h-8 w-8 text-primary" />}
-              title="AI Scheduling"
-              description="Generate optimized schedules in one click based on availability, skills, and labor laws."
+          <div className="relative -mx-6 md:mx-0 overflow-hidden">
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-zinc-950 to-transparent md:w-20"
+              aria-hidden
             />
-            <FeatureCard 
-              icon={<Calendar className="h-8 w-8 text-primary" />}
-              title="Smart Calendar"
-              description="Interactive drag-and-drop calendar with real-time conflict detection and updates."
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-zinc-950 to-transparent md:w-20"
+              aria-hidden
             />
-            <FeatureCard 
-              icon={<Users className="h-8 w-8 text-primary" />}
-              title="Team Management"
-              description="Centralized employee profiles, skill tracking, and performance monitoring."
-            />
-            <FeatureCard 
-              icon={<Clock className="h-8 w-8 text-primary" />}
-              title="Time Tracking"
-              description="Seamless clock-in/out and timesheet management for accurate payroll."
-            />
-            <FeatureCard 
-              icon={<CheckCircle2 className="h-8 w-8 text-primary" />}
-              title="Labor Compliance"
-              description="Automatically flag overtime and break violations before they happen."
-            />
+
+            <div className="flex w-max motion-reduce:animate-none animate-marquee hover:[animation-play-state:paused]">
+              <div className="flex gap-6 px-3 md:gap-8 md:px-0">
+                {FEATURE_ITEMS.map((item) => (
+                  <div key={item.title} className="w-[min(85vw,300px)] shrink-0 md:w-[300px]">
+                    <FeatureCard
+                      icon={<item.icon className="h-8 w-8 text-primary" aria-hidden />}
+                      title={item.title}
+                      description={item.description}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-6 px-3 md:gap-8 md:px-0" aria-hidden>
+                {FEATURE_ITEMS.map((item) => (
+                  <div key={`${item.title}-dup`} className="w-[min(85vw,300px)] shrink-0 md:w-[300px]">
+                    <FeatureCard
+                      icon={<item.icon className="h-8 w-8 text-primary" aria-hidden />}
+                      title={item.title}
+                      description={item.description}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
