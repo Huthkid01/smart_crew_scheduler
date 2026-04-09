@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { 
-  LayoutDashboard, 
-  Calendar, 
-  Users, 
-  Clock, 
-  BarChart3, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Calendar,
+  Users,
+  Clock,
+  BarChart3,
+  Settings,
   LogOut,
   Zap,
-  Building
+  Building,
 } from "lucide-react";
 import { supabase } from "@/supabase/client";
 

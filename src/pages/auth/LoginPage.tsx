@@ -6,7 +6,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Zap, Loader2, Eye, EyeOff } from "lucide-react";
+import { Zap, Eye, EyeOff } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 
 const loginSchema = z.object({
@@ -131,7 +132,7 @@ export default function LoginPage() {
           </div>
 
           <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-black font-bold" disabled={isLoading}>
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
+            {isLoading ? <SmartCrewLogoMark size="xs" /> : "Sign In"}
           </Button>
         </form>
 

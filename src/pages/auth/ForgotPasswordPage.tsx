@@ -6,7 +6,8 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Zap, Loader2, ArrowLeft } from "lucide-react";
+import { Zap, ArrowLeft } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 
 const forgotPasswordSchema = z.object({
@@ -87,10 +88,7 @@ export default function ForgotPasswordPage() {
 
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending Link...
-              </>
+              <SmartCrewLogoMark size="xs" />
             ) : (
               "Send Reset Link"
             )}

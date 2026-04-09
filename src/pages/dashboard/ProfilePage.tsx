@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Camera, Loader2 } from "lucide-react";
+import { Camera } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { toast } from "sonner";
 
@@ -142,7 +143,7 @@ export default function ProfilePage() {
   if (isLoading) {
       return (
           <div className="flex items-center justify-center h-full pt-20">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <SmartCrewLogoMark size="sm" />
           </div>
       );
   }
@@ -224,7 +225,7 @@ export default function ProfilePage() {
             </CardContent>
              <div className="p-6 pt-0 flex justify-end">
                 <Button type="submit" className="bg-primary text-black hover:bg-primary/90 font-bold" disabled={isSaving}>
-                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {isSaving ? <SmartCrewLogoMark size="xs" className="mr-2" /> : null}
                     Save Changes
                 </Button>
             </div>

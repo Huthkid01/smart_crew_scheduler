@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Clock, Loader2, MapPin, Briefcase, User } from "lucide-react";
+import { Calendar, Clock, MapPin, Briefcase, User } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { format, parse, isToday, isTomorrow, startOfWeek, endOfWeek, differenceInMinutes } from "date-fns";
 import { useNavigate } from "react-router-dom";
@@ -207,7 +208,7 @@ export default function EmployeeDashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full pt-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <SmartCrewLogoMark size="sm" />
       </div>
     );
   }

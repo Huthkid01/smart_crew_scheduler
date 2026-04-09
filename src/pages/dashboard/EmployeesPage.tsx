@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, MoreHorizontal, Loader2, Trash2 } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Trash2 } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -388,7 +389,7 @@ export default function EmployeesPage() {
 
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <SmartCrewLogoMark size="sm" />
         </div>
       ) : (
         <div className="rounded-md border border-zinc-800 bg-zinc-900">

@@ -20,7 +20,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Calendar as CalendarIcon, Clock, Loader2, Save } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Save } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { toast } from "sonner";
 
@@ -337,10 +338,7 @@ export default function AvailabilityPage() {
                           disabled={isSubmittingTimeOff}
                         >
                           {isSubmittingTimeOff ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />
-                              Submitting…
-                            </>
+                            <SmartCrewLogoMark size="xs" />
                           ) : (
                             "Submit Request"
                           )}
@@ -354,7 +352,7 @@ export default function AvailabilityPage() {
 
       {isLoading ? (
           <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <SmartCrewLogoMark size="sm" />
           </div>
       ) : (
         <div className="grid gap-6">
@@ -418,7 +416,7 @@ export default function AvailabilityPage() {
                     className="bg-primary hover:bg-primary/90 text-black font-bold"
                     disabled={isSaving || !selectedEmployeeId}
                 >
-                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    {isSaving ? <SmartCrewLogoMark size="xs" className="mr-2" /> : <Save className="mr-2 h-4 w-4" />}
                     Save Changes
                 </Button>
             </div>

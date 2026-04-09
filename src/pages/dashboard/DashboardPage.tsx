@@ -10,7 +10,7 @@ import SettingsPage from "./SettingsPage";
 import EmployeeDashboard from "./EmployeeDashboard";
 import { useEffect, useState } from "react";
 import { supabase } from "@/supabase/client";
-import { Loader2 } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 
 export default function DashboardPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <SmartCrewLogoMark size="sm" />
       </div>
     );
   }

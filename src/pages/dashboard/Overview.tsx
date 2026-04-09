@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, DollarSign, Clock, Loader2 } from "lucide-react";
+import { Users, Calendar, DollarSign, Clock } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { startOfWeek, endOfWeek, format, parse, differenceInMinutes } from "date-fns";
 
@@ -186,7 +187,7 @@ export default function Overview() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full pt-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <SmartCrewLogoMark size="sm" />
       </div>
     );
   }

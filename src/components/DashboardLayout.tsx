@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { supabase } from "@/supabase/client";
-import { Loader2, Menu, Zap } from "lucide-react";
+import { Menu, Zap } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { Button } from "@/components/ui/button";
 
 export function DashboardLayout() {
@@ -32,8 +33,14 @@ export function DashboardLayout() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div
+        className="min-h-screen bg-black flex flex-col items-center justify-center gap-3 text-white"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        aria-label="Loading SmartCrew"
+      >
+        <SmartCrewLogoMark size="lg" />
       </div>
     );
   }

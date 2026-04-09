@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
-import { DollarSign, Clock, TrendingUp, Users, Loader2 } from "lucide-react";
+import { DollarSign, Clock, TrendingUp, Users } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { format, subDays, startOfDay, endOfDay, eachDayOfInterval, parse, differenceInMinutes } from "date-fns";
 
@@ -124,7 +125,7 @@ export default function ReportsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full pt-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <SmartCrewLogoMark size="sm" />
       </div>
     );
   }
