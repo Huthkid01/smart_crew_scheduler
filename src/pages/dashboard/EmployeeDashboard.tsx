@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Clock, Loader2, MapPin, Briefcase, User } from "lucide-react";
 import { supabase } from "@/supabase/client";
@@ -14,7 +14,7 @@ interface MyShift {
   start_time: string;
   end_time: string;
   break_minutes?: number;
-  status: 'published' | 'draft';
+  status: 'published' | 'draft' | 'completed';
 }
 
 export default function EmployeeDashboard() {
@@ -27,101 +27,143 @@ export default function EmployeeDashboard() {
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [currentEntryId, setCurrentEntryId] = useState<string | null>(null);
 
+  const loadPublishedShiftsAndWeekly = useCallback(async (empId: string) => {
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const { data: shiftsData, error: shiftError } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("employee_id", empId)
+      .eq("status", "published")
+      .gte("date", todayStr)
+      .order("date", { ascending: true })
+      .order("start_time", { ascending: true })
+      .limit(10);
+
+    if (shiftError) console.error("Error fetching shifts:", shiftError);
+    setShifts((shiftsData as MyShift[]) || []);
+
+    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const end = endOfWeek(new Date(), { weekStartsOn: 1 });
+    const { data: weeklyShifts } = await supabase
+      .from("shifts")
+      .select("start_time, end_time, break_minutes")
+      .eq("employee_id", empId)
+      .eq("status", "published")
+      .gte("date", format(start, "yyyy-MM-dd"))
+      .lte("date", format(end, "yyyy-MM-dd"));
+
+    if (weeklyShifts) {
+      let totalMinutes = 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (weeklyShifts as any[]).forEach((shift) => {
+        const s = parse(shift.start_time, "HH:mm:ss", new Date());
+        const e = parse(shift.end_time, "HH:mm:ss", new Date());
+        let duration = differenceInMinutes(e, s);
+        if (duration < 0) duration += 24 * 60;
+        duration -= shift.break_minutes || 0;
+        totalMinutes += Math.max(0, duration);
+      });
+      setWeeklyHours(Math.round((totalMinutes / 60) * 10) / 10);
+    }
+  }, []);
+
+  const syncClockState = useCallback(async (empId: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: openEntry } = await (supabase.from("time_entries") as any)
+      .select("id")
+      .eq("employee_id", empId)
+      .is("clock_out", null)
+      .maybeSingle();
+
+    if (openEntry) {
+      setIsClockedIn(true);
+      setCurrentEntryId(openEntry.id);
+    } else {
+      setIsClockedIn(false);
+      setCurrentEntryId(null);
+    }
+  }, []);
+
   useEffect(() => {
-    async function fetchMyData() {
+    let cancelled = false;
+    const channelRef: { current: ReturnType<typeof supabase.channel> | null } = { current: null };
+
+    (async () => {
       setIsLoading(true);
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            console.log("No user found in EmployeeDashboard");
-            return;
-        }
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user || cancelled) return;
 
-        // 1. Get Employee Details
-        console.log("Fetching employee record for:", user.id);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: employee, error: empError } = await (supabase.from('employees') as any)
-            .select('id, name')
-            .eq('user_id', user.id)
-            .single();
+        const { data: employee, error: empError } = await (supabase.from("employees") as any)
+          .select("id, name")
+          .eq("user_id", user.id)
+          .single();
 
         if (empError) {
-            console.warn("Could not find employee record:", empError);
+          console.warn("Could not find employee record:", empError);
+        }
+        if (!employee || cancelled) return;
+
+        if (!cancelled) {
+          setUserName(employee.name);
+          setEmployeeId(employee.id);
         }
 
-        if (employee) {
-            setUserName(employee.name);
-            setEmployeeId(employee.id);
+        await loadPublishedShiftsAndWeekly(employee.id);
+        await syncClockState(employee.id);
+        if (cancelled) return;
 
-            console.log("Employee found:", employee);
-
-            // 4. Check Clock Status
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: openEntry } = await (supabase.from('time_entries') as any)
-                .select('id')
-                .eq('employee_id', employee.id)
-                .is('clock_out', null)
-                .single();
-            
-            if (openEntry) {
-                setIsClockedIn(true);
-                setCurrentEntryId(openEntry.id);
+        const rt = supabase
+          .channel(`employee-dash-${employee.id}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "shifts",
+              filter: `employee_id=eq.${employee.id}`,
+            },
+            () => {
+              loadPublishedShiftsAndWeekly(employee.id);
             }
-
-            // 2. Get My Upcoming Shifts
-            const todayStr = format(new Date(), 'yyyy-MM-dd');
-            console.log("Fetching shifts for employee:", employee.id, "from date:", todayStr);
-            
-            const { data: shiftsData, error: shiftError } = await supabase
-                .from('shifts')
-                .select('*')
-                .eq('employee_id', employee.id)
-                .eq('status', 'published') // Only show published shifts
-                .gte('date', todayStr)
-                .order('date', { ascending: true })
-                .order('start_time', { ascending: true })
-                .limit(10);
-            
-            if (shiftError) console.error("Error fetching shifts:", shiftError);
-            console.log("Fetched Shifts:", shiftsData);
-            
-            setShifts(shiftsData || []);
-
-            // 3. Calculate Weekly Hours
-            const start = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday start
-            const end = endOfWeek(new Date(), { weekStartsOn: 1 });
-            
-            const { data: weeklyShifts } = await supabase
-                .from('shifts')
-                .select('start_time, end_time, break_minutes')
-                .eq('employee_id', employee.id)
-                .eq('status', 'published')
-                .gte('date', format(start, 'yyyy-MM-dd'))
-                .lte('date', format(end, 'yyyy-MM-dd'));
-
-            if (weeklyShifts) {
-                let totalMinutes = 0;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (weeklyShifts as any[]).forEach(shift => {
-                    const s = parse(shift.start_time, 'HH:mm:ss', new Date());
-                    const e = parse(shift.end_time, 'HH:mm:ss', new Date());
-                    let duration = differenceInMinutes(e, s);
-                    if (duration < 0) duration += 24 * 60; // Handle overnight
-                    duration -= (shift.break_minutes || 0);
-                    totalMinutes += Math.max(0, duration);
-                });
-                setWeeklyHours(Math.round((totalMinutes / 60) * 10) / 10);
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "time_entries",
+              filter: `employee_id=eq.${employee.id}`,
+            },
+            () => {
+              syncClockState(employee.id);
             }
+          )
+          .subscribe();
+
+        if (cancelled) {
+          supabase.removeChannel(rt);
+          return;
         }
+        channelRef.current = rt;
       } catch (error) {
         console.error("Error fetching employee dashboard:", error);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
-    }
+    })();
 
-    fetchMyData();
-  }, []);
+    return () => {
+      cancelled = true;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [loadPublishedShiftsAndWeekly, syncClockState]);
 
   const handleClockInOut = async () => {
       if (!employeeId) return;

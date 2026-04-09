@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Calendar, DollarSign, Clock, Loader2 } from "lucide-react";
 import { supabase } from "@/supabase/client";
@@ -24,8 +25,6 @@ interface UpcomingShift {
   } | null;
 }
 
-import { useNavigate } from "react-router-dom";
-
 export default function Overview() {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
@@ -39,8 +38,7 @@ export default function Overview() {
   const [upcomingShifts, setUpcomingShifts] = useState<UpcomingShift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchAttendance = async () => {
-    // Fetch last 50 entries to avoid timezone issues
+  const fetchAttendance = useCallback(async () => {
     const { data: activeData } = await supabase
       .from('time_entries')
       .select(`
@@ -56,140 +54,134 @@ export default function Overview() {
       .limit(50);
 
     setActiveEmployees(activeData || []);
-  };
+  }, []);
+
+  const fetchShiftKpisAndUpcoming = useCallback(async () => {
+    const today = new Date();
+    const start = startOfWeek(today, { weekStartsOn: 1 });
+    const end = endOfWeek(today, { weekStartsOn: 1 });
+    const startStr = format(start, 'yyyy-MM-dd');
+    const endStr = format(end, 'yyyy-MM-dd');
+
+    const { count: employeeCount } = await supabase
+      .from('employees')
+      .select('*', { count: 'exact', head: true });
+
+    const { count: shiftCount } = await supabase
+      .from('shifts')
+      .select('*', { count: 'exact', head: true })
+      .gte('date', startStr)
+      .lte('date', endStr);
+
+    const { data: shiftsData } = await supabase
+      .from('shifts')
+      .select(`
+        start_time,
+        end_time,
+        break_minutes,
+        employees (
+          hourly_rate
+        )
+      `)
+      .gte('date', startStr)
+      .lte('date', endStr);
+
+    let totalCost = 0;
+    if (shiftsData) {
+      (shiftsData as unknown as ShiftWithCost[]).forEach((shift) => {
+        const employee = shift.employees;
+        if (employee && employee.hourly_rate) {
+          const startT = parse(shift.start_time, 'HH:mm:ss', new Date());
+          const endT = parse(shift.end_time, 'HH:mm:ss', new Date());
+          let durationMinutes = differenceInMinutes(endT, startT);
+          if (durationMinutes < 0) {
+            durationMinutes += 24 * 60;
+          }
+          durationMinutes -= (shift.break_minutes || 0);
+          const hours = Math.max(0, durationMinutes / 60);
+          const rate = Number(employee.hourly_rate);
+          if (!isNaN(rate)) {
+            totalCost += hours * rate;
+          }
+        }
+      });
+    }
+
+    const { count: pendingCount } = await supabase
+      .from('shifts')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'draft');
+
+    const { data: upcomingData } = await supabase
+      .from('shifts')
+      .select(`
+        id,
+        date,
+        start_time,
+        end_time,
+        employees (
+          name,
+          position
+        )
+      `)
+      .gte('date', format(today, 'yyyy-MM-dd'))
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true })
+      .limit(5);
+
+    setStats({
+      totalEmployees: employeeCount || 0,
+      shiftsThisWeek: shiftCount || 0,
+      laborCost: Math.round(totalCost),
+      pendingRequests: pendingCount || 0,
+    });
+    setUpcomingShifts((upcomingData as unknown as UpcomingShift[]) || []);
+  }, []);
 
   useEffect(() => {
-    async function fetchDashboardData() {
+    let cancelled = false;
+
+    async function loadAll() {
       setIsLoading(true);
       try {
-        const today = new Date();
-        const start = startOfWeek(today, { weekStartsOn: 1 }); // Monday start
-        const end = endOfWeek(today, { weekStartsOn: 1 });
-        
-        const startStr = format(start, 'yyyy-MM-dd');
-        const endStr = format(end, 'yyyy-MM-dd');
-
-        // 1. Total Employees
-        const { count: employeeCount } = await supabase
-          .from('employees')
-          .select('*', { count: 'exact', head: true });
-
-        // 2. Shifts This Week
-        const { count: shiftCount } = await supabase
-          .from('shifts')
-          .select('*', { count: 'exact', head: true })
-          .gte('date', startStr)
-          .lte('date', endStr);
-
-        // 3. Labor Cost (Fetch shifts with employee details)
-        const { data: shiftsData } = await supabase
-          .from('shifts')
-          .select(`
-            start_time,
-            end_time,
-            break_minutes,
-            employees (
-              hourly_rate
-            )
-          `)
-          .gte('date', startStr)
-          .lte('date', endStr);
-
-        // 4. Today's Attendance (Active + Completed)
-        await fetchAttendance();
-        
-        let totalCost = 0;
-        if (shiftsData) {
-          (shiftsData as unknown as ShiftWithCost[]).forEach((shift) => {
-            const employee = shift.employees;
-            if (employee && employee.hourly_rate) {
-              // Parse times
-              const start = parse(shift.start_time, 'HH:mm:ss', new Date());
-              const end = parse(shift.end_time, 'HH:mm:ss', new Date());
-              
-              // Calculate duration in minutes
-              let durationMinutes = differenceInMinutes(end, start);
-              
-              // Handle overnight shifts (if end time is before start time)
-              if (durationMinutes < 0) {
-                durationMinutes += 24 * 60;
-              }
-
-              // Subtract break time
-              durationMinutes -= (shift.break_minutes || 0);
-              
-              const hours = Math.max(0, durationMinutes / 60);
-              const rate = Number(employee.hourly_rate);
-              
-              if (!isNaN(rate)) {
-                totalCost += hours * rate;
-              }
-            }
-          });
-        }
-
-        // 4. Pending Requests (Draft Shifts for now)
-        const { count: pendingCount } = await supabase
-          .from('shifts')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'draft');
-
-        // 5. Upcoming Shifts
-        const { data: upcomingData } = await supabase
-          .from('shifts')
-          .select(`
-            id,
-            date,
-            start_time,
-            end_time,
-            employees (
-              name,
-              position
-            )
-          `)
-          .gte('date', format(today, 'yyyy-MM-dd'))
-          .order('date', { ascending: true })
-          .order('start_time', { ascending: true })
-          .limit(5);
-
-        setStats({
-          totalEmployees: employeeCount || 0,
-          shiftsThisWeek: shiftCount || 0,
-          laborCost: Math.round(totalCost),
-          pendingRequests: pendingCount || 0,
-        });
-        setUpcomingShifts((upcomingData as unknown as UpcomingShift[]) || []);
-
+        await Promise.all([fetchShiftKpisAndUpcoming(), fetchAttendance()]);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
 
-    fetchDashboardData();
+    loadAll();
 
-    // Subscribe to realtime changes
-    const subscription = supabase
-      .channel('time_entries_changes')
+    const timeChannel = supabase
+      .channel("overview-time_entries")
       .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'time_entries',
-        },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "time_entries" },
         () => {
-          console.log('Realtime update: fetching attendance...');
           fetchAttendance();
         }
       )
       .subscribe();
 
+    const shiftsChannel = supabase
+      .channel("overview-shifts")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "shifts" },
+        () => {
+          fetchShiftKpisAndUpcoming();
+        }
+      )
+      .subscribe();
+
     return () => {
-      subscription.unsubscribe();
+      cancelled = true;
+      supabase.removeChannel(timeChannel);
+      supabase.removeChannel(shiftsChannel);
     };
-  }, []);
+  }, [fetchAttendance, fetchShiftKpisAndUpcoming]);
 
   if (isLoading) {
     return (
@@ -300,7 +292,7 @@ export default function Overview() {
                                 <div key={entry.id} className="flex items-center justify-between border-b border-zinc-800 pb-2 last:border-0">
                                     <div className="flex items-center gap-3">
                                         <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs ${entry.clock_out ? 'bg-zinc-800 text-zinc-400' : 'bg-green-900/30 text-green-500'}`}>
-                                            {entry.employees?.name.charAt(0)}
+                                            {entry.employees?.name?.charAt(0) ?? "?"}
                                         </div>
                                         <div>
                                             <p className={`font-medium text-sm ${entry.clock_out ? 'text-zinc-400' : 'text-white'}`}>{entry.employees?.name}</p>
