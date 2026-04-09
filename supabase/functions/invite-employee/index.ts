@@ -20,7 +20,14 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { email, employee_id, org_id, full_name } = await req.json()
+    let body: { email?: string; employee_id?: string; org_id?: string; full_name?: string }
+    try {
+      body = await req.json()
+    } catch {
+      throw new Error('Invalid or empty JSON body')
+    }
+
+    const { email, employee_id, org_id, full_name } = body
 
     if (!email || !employee_id || !org_id) {
         throw new Error("Missing required fields: email, employee_id, or org_id");
@@ -30,7 +37,10 @@ serve(async (req) => {
 
     console.log(`Inviting employee: ${email}`);
 
-    // Production: set SITE_URL secret (e.g. https://smart-crew-scheduler.vercel.app) so invites work even if Origin is missing.
+    // Base URL for invite email links (must match Supabase Auth → Redirect URLs).
+    // 1) SITE_URL — set in Supabase Dashboard → Project Settings → Edge Functions → Secrets (production).
+    // 2) Origin — browser sends this when the admin calls the function from your deployed app (e.g. Vercel).
+    // 3) http://localhost:5173 — Vite default; only used for local dev when 1 and 2 are missing.
     const siteBase = (Deno.env.get('SITE_URL') || req.headers.get('origin') || 'http://localhost:5173').replace(/\/$/, '')
 
     // 2. Invite user via Supabase Auth
