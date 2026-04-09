@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Calendar, momentLocalizer, Views } from "react-big-calendar";
 import type { View } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Plus, ChevronLeft, ChevronRight, Loader2, Send, Trash2 } from "lucide-react";
+import { Sparkles, Plus, ChevronLeft, ChevronRight, Send, Trash2, CalendarDays } from "lucide-react";
+import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
-import { parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
+import { DayPicker, type DateRange } from "react-day-picker";
 // import type { Database } from "@/supabase/types";
 
 interface Profile {
@@ -34,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 // Setup the localizer by providing the moment (or globalize, or Luxon) instance
 // to the localizer accessor.
@@ -64,10 +67,36 @@ export default function SchedulePage() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isRoleLoading, setIsRoleLoading] = useState(true);
+  const [aiDateRange, setAiDateRange] = useState<DateRange | undefined>(undefined);
+  const [aiGoal, setAiGoal] = useState("balance");
+  const [aiPickerOpen, setAiPickerOpen] = useState(false);
+  const aiDateRangeRef = useRef<DateRange | undefined>(undefined);
 
   useEffect(() => {
-    fetchUserRole();
-    fetchEmployees();
+    aiDateRangeRef.current = aiDateRange;
+  }, [aiDateRange]);
+
+  function handleAiPickerOpenChange(open: boolean) {
+    if (open) {
+      setAiPickerOpen(true);
+      return;
+    }
+    const r = aiDateRangeRef.current;
+    if (r?.from && r?.to) {
+      setAiPickerOpen(false);
+    }
+  }
+
+  /** Block Radix dismiss while range incomplete (fixes popover-in-dialog closing on first day click). */
+  function blockAiPickerDismissIfIncomplete(e: Event) {
+    const r = aiDateRangeRef.current;
+    if (!r?.from || !r?.to) {
+      e.preventDefault();
+    }
+  }
+
+  useEffect(() => {
+    void loadScheduleContext();
   }, []);
 
   useEffect(() => {
@@ -77,49 +106,39 @@ export default function SchedulePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
 
-  async function fetchUserRole() {
-    try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-        const { data } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setUserRole((data as any)?.role || 'employee');
-        }
-    } catch (error) {
-        console.error("Error fetching role:", error);
-    } finally {
-        setIsRoleLoading(false);
-    }
-  }
-
-  async function fetchEmployees() {
+  /** One auth + profile read, then employees — avoids waiting on separate role/employee fetches before showing the toolbar. */
+  async function loadScheduleContext() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setIsRoleLoading(false);
+        return;
+      }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('org_id')
-        .eq('id', user.id)
+      const { data } = await supabase
+        .from("profiles")
+        .select("role, org_id")
+        .eq("id", user.id)
         .single();
 
-      if (profile) {
-        const orgId = (profile as Profile).org_id;
-        const { data: employeesData } = await supabase
-          .from('employees')
-          .select('id, name')
-          .eq('org_id', orgId)
-          .eq('is_active', true)
-          .order('name');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const row = data as any;
+      setUserRole(row?.role || "employee");
 
+      if (row?.org_id) {
+        const orgId = row.org_id as string;
+        const { data: employeesData } = await supabase
+          .from("employees")
+          .select("id, name")
+          .eq("org_id", orgId)
+          .eq("is_active", true)
+          .order("name");
         setEmployees(employeesData || []);
       }
     } catch (error) {
-      console.error("Error fetching employees:", error);
+      console.error("Error loading schedule context:", error);
+    } finally {
+      setIsRoleLoading(false);
     }
   }
 
@@ -227,12 +246,17 @@ export default function SchedulePage() {
 
   const handleGenerateSchedule = async (e: React.FormEvent) => {
       e.preventDefault();
+
+      if (!aiDateRange?.from || !aiDateRange?.to) {
+        toast.error("Select a date range using the calendar.");
+        return;
+      }
+
+      const startDate = format(aiDateRange.from, "yyyy-MM-dd");
+      const endDate = format(aiDateRange.to, "yyyy-MM-dd");
+      const goal = aiGoal;
+
       setIsLoading(true);
-      
-      const formData = new FormData(e.target as HTMLFormElement);
-      const startDate = formData.get("start_date") as string;
-      const endDate = formData.get("end_date") as string;
-      const goal = formData.get("goal") as string;
 
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -618,8 +642,18 @@ export default function SchedulePage() {
             <h1 className="text-3xl font-bold tracking-tight text-white">Schedule</h1>
             <p className="text-zinc-400">Manage shifts and staffing.</p>
         </div>
-        <div className="flex flex-wrap justify-center gap-2">
-            {!isRoleLoading && userRole !== 'employee' && (
+        <div className="flex flex-wrap justify-center gap-2 min-h-10">
+            {isRoleLoading ? (
+              <div
+                className="flex flex-wrap justify-center gap-2 w-full sm:w-auto"
+                aria-busy="true"
+                aria-label="Loading schedule actions"
+              >
+                <div className="h-10 w-[148px] rounded-md bg-zinc-800 motion-safe:animate-pulse" />
+                <div className="h-10 w-[132px] rounded-md bg-zinc-800 motion-safe:animate-pulse" />
+                <div className="h-10 w-[124px] rounded-md bg-zinc-800 motion-safe:animate-pulse" />
+              </div>
+            ) : userRole !== "employee" ? (
                 <>
                     <Button 
                         variant="outline" 
@@ -627,10 +661,19 @@ export default function SchedulePage() {
                         onClick={handlePublish}
                         disabled={isPublishing}
                     >
-                        {isPublishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        {isPublishing ? <SmartCrewLogoMark size="xs" className="mr-2" /> : <Send className="mr-2 h-4 w-4" />}
                         Publish Schedule
                     </Button>
-                    <Dialog open={isAiModalOpen} onOpenChange={setIsAiModalOpen}>
+                    <Dialog
+                        open={isAiModalOpen}
+                        onOpenChange={(open) => {
+                            setIsAiModalOpen(open);
+                            if (!open) {
+                                setAiDateRange(undefined);
+                                setAiPickerOpen(false);
+                            }
+                        }}
+                    >
                         <DialogTrigger asChild>
                             <Button className="bg-primary text-black hover:bg-primary/90 hover:text-black font-bold gap-2">
                                 <Sparkles className="h-4 w-4" />
@@ -648,19 +691,75 @@ export default function SchedulePage() {
                                 <div className="grid gap-4 py-4">
                                     {isLoading && (
                                         <div className="absolute inset-0 bg-zinc-950/90 flex flex-col items-center justify-center z-50 rounded-lg">
-                                            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+                                            <SmartCrewLogoMark size="md" className="mb-4" />
                                             <p className="text-white font-medium">Generating Schedule...</p>
                                             <p className="text-zinc-400 text-sm mt-2">This may take 10-20 seconds.</p>
                                         </div>
                                     )}
-                                    <div className="grid grid-cols-4 items-center gap-4">
-                                        <Label htmlFor="date-range" className="text-right">
-                                        Date Range
-                                        </Label>
-                                        <div className="col-span-3 flex gap-2">
-                                            <Input name="start_date" type="date" className="bg-zinc-950 border-zinc-800" required />
-                                            <span className="self-center">-</span>
-                                            <Input name="end_date" type="date" className="bg-zinc-950 border-zinc-800" required />
+                                    <div className="grid grid-cols-4 items-start gap-4">
+                                        <Label className="text-right pt-2.5">Date range</Label>
+                                        <div className="col-span-3 space-y-1">
+                                            <Popover modal open={aiPickerOpen} onOpenChange={handleAiPickerOpenChange}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        className="w-full justify-start border-zinc-800 bg-zinc-950 text-left font-normal text-zinc-200 hover:bg-zinc-800 hover:text-white"
+                                                    >
+                                                        <CalendarDays className="mr-2 h-4 w-4 shrink-0 text-primary" />
+                                                        {aiDateRange?.from ? (
+                                                            aiDateRange.to ? (
+                                                                <>
+                                                                    {format(aiDateRange.from, "LLL d, yyyy")} –{" "}
+                                                                    {format(aiDateRange.to, "LLL d, yyyy")}
+                                                                </>
+                                                            ) : (
+                                                                format(aiDateRange.from, "LLL d, yyyy")
+                                                            )
+                                                        ) : (
+                                                            <span className="text-zinc-500">Open calendar to choose dates</span>
+                                                        )}
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent
+                                                    className="w-auto border-zinc-800 bg-zinc-900 p-0"
+                                                    align="start"
+                                                    onInteractOutside={blockAiPickerDismissIfIncomplete}
+                                                    onPointerDownOutside={blockAiPickerDismissIfIncomplete}
+                                                    onFocusOutside={blockAiPickerDismissIfIncomplete}
+                                                >
+                                                    <DayPicker
+                                                        mode="range"
+                                                        weekStartsOn={1}
+                                                        numberOfMonths={1}
+                                                        selected={aiDateRange}
+                                                        onSelect={(range) => {
+                                                            aiDateRangeRef.current = range;
+                                                            setAiDateRange(range);
+                                                        }}
+                                                        className="ai-schedule-picker"
+                                                    />
+                                                    <div className="flex justify-end border-t border-zinc-800 px-2 py-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-8 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                                                            onClick={() => {
+                                                                setAiDateRange(undefined);
+                                                                setAiPickerOpen(false);
+                                                            }}
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                </PopoverContent>
+                                            </Popover>
+                                            <p className="text-xs text-zinc-500">
+                                                Pick a start date, then an end date. The calendar stays open until both are
+                                                chosen; then click outside or press Esc to close. Use Cancel to clear and
+                                                close early.
+                                            </p>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-4 items-center gap-4">
@@ -668,7 +767,7 @@ export default function SchedulePage() {
                                         Goal
                                         </Label>
                                         <div className="col-span-3">
-                                            <Select name="goal" defaultValue="balance">
+                                            <Select value={aiGoal} onValueChange={setAiGoal}>
                                                 <SelectTrigger className="bg-zinc-950 border-zinc-800">
                                                     <SelectValue placeholder="Select optimization goal" />
                                                 </SelectTrigger>
@@ -683,7 +782,7 @@ export default function SchedulePage() {
                                 </div>
                                 <DialogFooter>
                                     <Button type="submit" className="bg-primary text-black hover:bg-primary/90 w-full" disabled={isLoading}>
-                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} 
+                                        {isLoading ? <SmartCrewLogoMark size="xs" className="mr-2" /> : <Sparkles className="mr-2 h-4 w-4" />} 
                                         Generate Schedule
                                     </Button>
                                 </DialogFooter>
@@ -750,7 +849,7 @@ export default function SchedulePage() {
                         </DialogContent>
                     </Dialog>
                 </>
-            )}
+            ) : null}
         </div>
       </div>
 
