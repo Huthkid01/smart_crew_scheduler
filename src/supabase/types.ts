@@ -28,6 +28,7 @@ export interface Database {
           subscription_tier?: string
           created_at?: string
         }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -57,6 +58,15 @@ export interface Database {
           avatar_url?: string | null
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'profiles_org_id_fkey'
+            columns: ['org_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
       }
       employees: {
         Row: {
@@ -89,6 +99,15 @@ export interface Database {
           hourly_rate?: number
           is_active?: boolean
         }
+        Relationships: [
+          {
+            foreignKeyName: 'employees_org_id_fkey'
+            columns: ['org_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
       }
       shifts: {
         Row: {
@@ -121,6 +140,22 @@ export interface Database {
           break_minutes?: number
           status?: 'draft' | 'published' | 'completed'
         }
+        Relationships: [
+          {
+            foreignKeyName: 'shifts_org_id_fkey'
+            columns: ['org_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shifts_employee_id_fkey'
+            columns: ['employee_id']
+            isOneToOne: false
+            referencedRelation: 'employees'
+            referencedColumns: ['id']
+          },
+        ]
       }
       availability: {
         Row: {
@@ -147,6 +182,95 @@ export interface Database {
           start_time?: string | null
           end_time?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: 'availability_employee_id_fkey'
+            columns: ['employee_id']
+            isOneToOne: false
+            referencedRelation: 'employees'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      time_entries: {
+        Row: {
+          id: string
+          employee_id: string
+          shift_id: string | null
+          clock_in: string
+          clock_out: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          shift_id?: string | null
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          shift_id?: string | null
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'time_entries_employee_id_fkey'
+            columns: ['employee_id']
+            isOneToOne: false
+            referencedRelation: 'employees'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'time_entries_shift_id_fkey'
+            columns: ['shift_id']
+            isOneToOne: false
+            referencedRelation: 'shifts'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      time_off_requests: {
+        Row: {
+          id: string
+          employee_id: string
+          start_date: string
+          end_date: string
+          reason: string
+          status: 'pending' | 'approved' | 'rejected'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          start_date: string
+          end_date: string
+          reason: string
+          status?: 'pending' | 'approved' | 'rejected'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          start_date?: string
+          end_date?: string
+          reason?: string
+          status?: 'pending' | 'approved' | 'rejected'
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'time_off_requests_employee_id_fkey'
+            columns: ['employee_id']
+            isOneToOne: false
+            referencedRelation: 'employees'
+            referencedColumns: ['id']
+          },
+        ]
       }
     }
     Views: {

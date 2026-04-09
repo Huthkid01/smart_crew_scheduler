@@ -225,14 +225,13 @@ export default function AvailabilityPage() {
 
     setIsSubmittingTimeOff(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await supabase.from("time_off_requests").insert({
         employee_id: selectedEmployeeId,
         start_date: timeOffStart,
         end_date: timeOffEnd,
         reason: timeOffReason.trim(),
         status: "pending",
-      } as any);
+      });
 
       if (error) throw error;
 
