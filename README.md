@@ -7,7 +7,7 @@ An AI-powered workforce management and scheduling platform designed for modern t
 ### 📅 AI-Powered Scheduling
 *   **Automated Schedule Generation:** Uses Groq API keys to create optimized schedules in seconds based on employee availability and skills.
 *   **Smart Calendar:** Interactive drag-and-drop calendar for manual adjustments.
-*   **Conflict Detection:** Automatically avoids scheduling employees during their time off or double-booking.
+*   **Conflict Detection:** AI scheduling respects weekly availability and avoids double-booking; approved time-off is stored for HR visibility (approve/reject in the database or a future admin UI).
 *   **Publishing Workflow:** Create drafts and publish schedules only when they are ready.
 
 ### 👥 Team Management
@@ -28,7 +28,7 @@ An AI-powered workforce management and scheduling platform designed for modern t
 
 ### 📱 Employee Self-Service
 *   **Personal Dashboard:** Employees can view their own upcoming shifts and weekly hours.
-*   **Availability Management:** Employees can set their preferred working hours and time-off requests.
+*   **Availability Management:** Weekly availability is saved to the database; time-off requests are stored with pending/approved/rejected status.
 *   **Profile Management:** Update personal contact details.
 
 ## 🛠️ Technology Stack
@@ -45,8 +45,8 @@ An AI-powered workforce management and scheduling platform designed for modern t
 ### Prerequisites
 *   Node.js (v18+)
 *   npm or bun
-*   Supabase Account
-*   Google AI Studio API Key
+*   Supabase account
+*   [Groq](https://console.groq.com/) API key (for AI schedule generation in the app)
 
 ### Installation
 
@@ -76,6 +76,18 @@ An AI-powered workforce management and scheduling platform designed for modern t
 
 ### Database Setup
 Run the SQL migrations provided in `supabase/migrations` to set up your tables and Row Level Security (RLS) policies.
+
+### Testing
+Automated checks use [Vitest](https://vitest.dev/). From the project root:
+
+```bash
+npm test
+```
+
+This runs unit tests (e.g. shared utilities). For releases, also run `npm run build` and manual smoke tests on auth, invites, scheduling, and time clock flows.
+
+### Edge Functions (optional)
+If you use the `generate-schedule` Edge Function, set a **`GROQ_API_KEY`** secret in the Supabase dashboard (same key as Groq; do not expose the service key in the client). The in-app scheduler uses `VITE_GROQ_API_KEY` in `.env`.
 
 ## 📝 License
 

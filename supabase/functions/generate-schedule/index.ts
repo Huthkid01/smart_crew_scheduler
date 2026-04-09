@@ -56,7 +56,7 @@ serve(async (req) => {
     
     if (shiftError) throw shiftError
 
-    // 3. Construct prompt for Gemini
+    // 3. Construct prompt for the LLM (Groq in production; mock fallback if no key)
     const prompt = `
       You are an expert scheduler. Generate an optimal work schedule for the following employees from ${start_date} to ${end_date}.
       
@@ -84,60 +84,68 @@ serve(async (req) => {
       Do not include any explanation, just the JSON.
     `
 
-    // 4. Call Google Gemini API
-    // Use the key provided by the user, falling back to env var
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY'); 
-    
-    let generatedSchedule: any[] = [];
+    // 4. Call Groq (set GROQ_API_KEY in Supabase Edge Function secrets)
+    const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY')
 
-    if (GEMINI_API_KEY) {
-        // Using gemini-1.5-flash for speed and cost efficiency, or gemini-pro
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }]
-            })
-        });
+    let generatedSchedule: any[] = []
 
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(`Gemini API Error: ${data.error.message}`);
+    function parseScheduleFromText(text: string): any[] {
+      const trimmed = text.trim()
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) return parsed
+        if (parsed?.shifts && Array.isArray(parsed.shifts)) return parsed.shifts
+        if (parsed?.schedule && Array.isArray(parsed.schedule)) return parsed.schedule
+      } catch {
+        /* fall through */
+      }
+      const jsonMatch = trimmed.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        try {
+          return JSON.parse(jsonMatch[0])
+        } catch {
+          console.error('Failed to parse JSON array from Groq response:', trimmed)
         }
+      }
+      return []
+    }
 
-        const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        
-        // Extract JSON from response (handle potential markdown formatting)
-        const jsonMatch = textResponse.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-            try {
-                generatedSchedule = JSON.parse(jsonMatch[0]);
-            } catch (e) {
-                console.error("Failed to parse JSON from AI response:", textResponse);
-            }
-        } else {
-             // Fallback if AI fails to return valid JSON
-            console.error("Failed to find JSON in AI response:", textResponse);
-        }
+    if (GROQ_API_KEY) {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.5,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      })
+
+      const data = await response.json()
+      if (data.error) {
+        throw new Error(`Groq API Error: ${data.error.message}`)
+      }
+
+      const textResponse = data.choices?.[0]?.message?.content || ''
+      generatedSchedule = parseScheduleFromText(textResponse)
+      if (generatedSchedule.length === 0) {
+        console.error('Groq returned no parseable schedule:', textResponse)
+      }
     } else {
-        // Mock response if no API key
-        console.log("No Google API Key found. Returning mock schedule.");
-        generatedSchedule = [
-            {
-                employee_id: employees[0]?.id,
-                date: start_date,
-                start_time: "09:00",
-                end_time: "17:00",
-                role: employees[0]?.position
-            }
-        ]
+      console.log('No GROQ_API_KEY secret. Returning mock schedule.')
+      generatedSchedule = [
+        {
+          employee_id: employees[0]?.id,
+          date: start_date,
+          start_time: '09:00',
+          end_time: '17:00',
+          role: employees[0]?.position,
+        },
+      ]
     }
 
     return new Response(

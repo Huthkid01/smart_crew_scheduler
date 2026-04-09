@@ -66,6 +66,10 @@ export default function AvailabilityPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isTimeOffOpen, setIsTimeOffOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [timeOffStart, setTimeOffStart] = useState("");
+  const [timeOffEnd, setTimeOffEnd] = useState("");
+  const [timeOffReason, setTimeOffReason] = useState("");
+  const [isSubmittingTimeOff, setIsSubmittingTimeOff] = useState(false);
 
   useEffect(() => {
     fetchUserData();
@@ -204,10 +208,47 @@ export default function AvailabilityPage() {
     }
   };
 
-  const handleSubmitTimeOff = (e: React.FormEvent) => {
-      e.preventDefault();
+  const handleSubmitTimeOff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmployeeId) {
+      toast.error("Select an employee first.");
+      return;
+    }
+    if (!timeOffStart || !timeOffEnd || !timeOffReason.trim()) {
+      toast.error("Please fill in all fields.");
+      return;
+    }
+    if (new Date(timeOffEnd) < new Date(timeOffStart)) {
+      toast.error("End date must be on or after the start date.");
+      return;
+    }
+
+    setIsSubmittingTimeOff(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await supabase.from("time_off_requests").insert({
+        employee_id: selectedEmployeeId,
+        start_date: timeOffStart,
+        end_date: timeOffEnd,
+        reason: timeOffReason.trim(),
+        status: "pending",
+      } as any);
+
+      if (error) throw error;
+
+      toast.success("Time off request submitted.");
       setIsTimeOffOpen(false);
-      toast.success("Time off request submitted! (Mock functionality)");
+      setTimeOffStart("");
+      setTimeOffEnd("");
+      setTimeOffReason("");
+    } catch (err) {
+      console.error(err);
+      toast.error(
+        "Could not save the request. Run the latest Supabase migration for time_off_requests, then try again."
+      );
+    } finally {
+      setIsSubmittingTimeOff(false);
+    }
   };
 
   return (
@@ -230,7 +271,17 @@ export default function AvailabilityPage() {
                     </SelectContent>
                 </Select>
             )}
-            <Dialog open={isTimeOffOpen} onOpenChange={setIsTimeOffOpen}>
+            <Dialog
+              open={isTimeOffOpen}
+              onOpenChange={(open) => {
+                setIsTimeOffOpen(open);
+                if (!open) {
+                  setTimeOffStart("");
+                  setTimeOffEnd("");
+                  setTimeOffReason("");
+                }
+              }}
+            >
             <DialogTrigger asChild>
                 <Button variant="outline" className="bg-zinc-800 hover:bg-zinc-700 transition-colors border-zinc-700 text-white hover:text-white w-full sm:w-auto">
                 <CalendarIcon className="mr-2 h-4 w-4" /> Request Time Off
@@ -241,26 +292,60 @@ export default function AvailabilityPage() {
                 <DialogHeader>
                 <DialogTitle>Request Time Off</DialogTitle>
                 <DialogDescription className="text-zinc-400">
-                    Submit a request for time off.
+                    Requests are saved to the database as <span className="text-zinc-300">pending</span> for admin review (update status in Supabase or a future approvals screen).
                 </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmitTimeOff}>
                     <div className="grid gap-4 py-4">
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="start-date" className="text-right">Start Date</Label>
-                            <Input id="start-date" type="date" className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                            <Input
+                              id="start-date"
+                              type="date"
+                              className="col-span-3 bg-zinc-950 border-zinc-800"
+                              required
+                              value={timeOffStart}
+                              onChange={(e) => setTimeOffStart(e.target.value)}
+                            />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="end-date" className="text-right">End Date</Label>
-                            <Input id="end-date" type="date" className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                            <Input
+                              id="end-date"
+                              type="date"
+                              className="col-span-3 bg-zinc-950 border-zinc-800"
+                              required
+                              value={timeOffEnd}
+                              onChange={(e) => setTimeOffEnd(e.target.value)}
+                            />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="reason" className="text-right">Reason</Label>
-                            <Input id="reason" placeholder="Vacation, etc." className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                            <Input
+                              id="reason"
+                              placeholder="Vacation, etc."
+                              className="col-span-3 bg-zinc-950 border-zinc-800"
+                              required
+                              value={timeOffReason}
+                              onChange={(e) => setTimeOffReason(e.target.value)}
+                            />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button type="submit" className="bg-primary text-black hover:bg-primary/90">Submit Request</Button>
+                        <Button
+                          type="submit"
+                          className="bg-primary text-black hover:bg-primary/90"
+                          disabled={isSubmittingTimeOff}
+                        >
+                          {isSubmittingTimeOff ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />
+                              Submitting…
+                            </>
+                          ) : (
+                            "Submit Request"
+                          )}
+                        </Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
