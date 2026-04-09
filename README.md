@@ -75,7 +75,17 @@ An AI-powered workforce management and scheduling platform designed for modern t
     ```
 
 ### Database Setup
-Run the SQL migrations provided in `supabase/migrations` to set up your tables and Row Level Security (RLS) policies.
+Run the SQL migrations in `supabase/migrations` (Supabase SQL Editor, or `supabase db push` if your migration history matches).
+
+**Apply selected “feature” migrations to an existing hosted project** (uses the [database password](https://supabase.com/dashboard/project/_/settings/database), not the anon key):
+
+```bash
+SUPABASE_DB_PASSWORD='your-database-password' npm run db:apply-remote
+```
+
+This runs, in order: `handle_new_user` invite fix, Realtime publication for `time_entries` / `shifts`, and `time_off_requests` + RLS. It is safe to re-run. Override host/user with `SUPABASE_DB_HOST`, `SUPABASE_DB_USER`, `SUPABASE_PROJECT_REF` if your pooler region differs.
+
+**Frontend ↔ Supabase:** `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env` must be from the **same** Supabase project as your database (ref in the URL matches the project ref).
 
 ### Testing
 Automated checks use [Vitest](https://vitest.dev/). From the project root:

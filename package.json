@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
+    "db:apply-remote": "node scripts/apply-remote-migrations.mjs",
     "db:push": "supabase db push",
     "functions:deploy": "supabase functions deploy invite-employee delete-user generate-schedule --no-verify-jwt"
   },
@@ -51,6 +52,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "pg": "^8.14.1",
     "postcss": "^8.5.6",
     "supabase": "^2.76.15",
     "tailwindcss": "^3.4.17",

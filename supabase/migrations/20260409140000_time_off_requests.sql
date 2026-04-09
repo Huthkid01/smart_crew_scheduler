@@ -1,4 +1,4 @@
--- Persisted time-off requests (replaces mock-only UI)
+-- Persisted time-off requests (replaces mock-only UI). Safe to re-run.
 
 CREATE TABLE IF NOT EXISTS public.time_off_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -16,6 +16,7 @@ CREATE INDEX IF NOT EXISTS idx_time_off_requests_status ON public.time_off_reque
 
 ALTER TABLE public.time_off_requests ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Employees can view own time off requests" ON public.time_off_requests;
 CREATE POLICY "Employees can view own time off requests"
   ON public.time_off_requests FOR SELECT
   USING (
@@ -25,6 +26,7 @@ CREATE POLICY "Employees can view own time off requests"
     )
   );
 
+DROP POLICY IF EXISTS "Admins and managers can view org time off requests" ON public.time_off_requests;
 CREATE POLICY "Admins and managers can view org time off requests"
   ON public.time_off_requests FOR SELECT
   USING (
@@ -37,6 +39,7 @@ CREATE POLICY "Admins and managers can view org time off requests"
     )
   );
 
+DROP POLICY IF EXISTS "Employees can insert own time off requests" ON public.time_off_requests;
 CREATE POLICY "Employees can insert own time off requests"
   ON public.time_off_requests FOR INSERT
   WITH CHECK (
@@ -46,6 +49,7 @@ CREATE POLICY "Employees can insert own time off requests"
     )
   );
 
+DROP POLICY IF EXISTS "Admins and managers can insert time off for org employees" ON public.time_off_requests;
 CREATE POLICY "Admins and managers can insert time off for org employees"
   ON public.time_off_requests FOR INSERT
   WITH CHECK (
@@ -58,6 +62,7 @@ CREATE POLICY "Admins and managers can insert time off for org employees"
     )
   );
 
+DROP POLICY IF EXISTS "Admins and managers can update org time off requests" ON public.time_off_requests;
 CREATE POLICY "Admins and managers can update org time off requests"
   ON public.time_off_requests FOR UPDATE
   USING (
