@@ -159,7 +159,8 @@ export default function EmployeesPage() {
                     body: JSON.stringify({
                         email: email,
                         employee_id: data.id,
-                        org_id: orgId
+                        org_id: orgId,
+                        full_name: employeeData.name,
                     })
                 });
 

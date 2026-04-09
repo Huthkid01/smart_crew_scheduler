@@ -154,15 +154,38 @@ CREATE POLICY "Admins and Managers can manage availability" ON availability
         )
     );
 
--- Helper function to handle new user signup
+-- Helper function to handle new user signup (and invited users: see migrations for latest body)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
+DECLARE
+  meta jsonb := COALESCE(new.raw_user_meta_data, '{}'::jsonb);
+  v_org_id uuid;
+  v_org_text text;
+  v_full_name text;
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
-  VALUES (new.id, new.email, new.raw_user_meta_data->>'full_name', 'employee');
+  v_full_name := NULLIF(trim(COALESCE(meta->>'full_name', meta->>'name', '')), '');
+  IF v_full_name IS NULL THEN
+    v_full_name := split_part(new.email, '@', 1);
+  END IF;
+
+  v_org_text := NULLIF(trim(COALESCE(meta->>'org_id', '')), '');
+  IF v_org_text IS NOT NULL THEN
+    BEGIN
+      v_org_id := v_org_text::uuid;
+    EXCEPTION
+      WHEN invalid_text_representation THEN
+        v_org_id := NULL;
+    END;
+  ELSE
+    v_org_id := NULL;
+  END IF;
+
+  INSERT INTO public.profiles (id, email, full_name, role, org_id)
+  VALUES (new.id, new.email, v_full_name, 'employee', v_org_id);
+
   RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Trigger for new user signup
 CREATE OR REPLACE TRIGGER on_auth_user_created

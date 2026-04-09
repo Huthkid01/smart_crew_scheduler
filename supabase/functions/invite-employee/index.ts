@@ -20,23 +20,29 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { email, employee_id, org_id } = await req.json()
+    const { email, employee_id, org_id, full_name } = await req.json()
 
     if (!email || !employee_id || !org_id) {
         throw new Error("Missing required fields: email, employee_id, or org_id");
     }
 
+    const displayName = typeof full_name === 'string' && full_name.trim() ? full_name.trim() : email.split('@')[0]
+
     console.log(`Inviting employee: ${email}`);
+
+    // Production: set SITE_URL secret (e.g. https://smart-crew-scheduler.vercel.app) so invites work even if Origin is missing.
+    const siteBase = (Deno.env.get('SITE_URL') || req.headers.get('origin') || 'http://localhost:5173').replace(/\/$/, '')
 
     // 2. Invite user via Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
         data: {
             employee_id: employee_id,
             org_id: org_id,
-            role: 'employee'
+            role: 'employee',
+            full_name: displayName,
+            name: displayName,
         },
-        // Redirect the user to the reset password page after they click the email link
-        redirectTo: `${req.headers.get('origin') || 'http://localhost:5173'}/reset-password`
+        redirectTo: `${siteBase}/reset-password`
     })
 
     if (authError) {
