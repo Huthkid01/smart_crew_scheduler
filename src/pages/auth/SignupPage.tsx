@@ -15,6 +15,7 @@ const signupSchema = z.object({
   orgName: z.string().min(2, "Organization name is required"),
   fullName: z.string().min(2, "Full name is required"),
   email: z.string().email("Invalid email address"),
+  adminCode: z.string().min(1, "Admin access code is required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
@@ -80,6 +81,11 @@ export default function SignupPage() {
     setNotice(null);
 
     try {
+      const requiredAdminCode = import.meta.env.VITE_ADMIN_SIGNUP_CODE as string | undefined;
+      if (requiredAdminCode && data.adminCode.trim() !== requiredAdminCode.trim()) {
+        throw new Error("Invalid admin access code. Employees must be invited by an admin.");
+      }
+
       // 1. Create user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
@@ -311,6 +317,20 @@ export default function SignupPage() {
                 />
                 {signupForm.formState.errors.email && (
                   <p className="text-destructive text-xs">{signupForm.formState.errors.email.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="adminCode" className="text-white">Admin Access Code</Label>
+                <Input
+                  id="adminCode"
+                  type="password"
+                  {...signupForm.register("adminCode")}
+                  className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
+                  placeholder="Admin code"
+                />
+                {signupForm.formState.errors.adminCode && (
+                  <p className="text-destructive text-xs">{signupForm.formState.errors.adminCode.message}</p>
                 )}
               </div>
 

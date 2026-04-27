@@ -32,7 +32,16 @@ export default function LoginPage() {
     const checkSession = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-            navigate('/dashboard');
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("org_id")
+              .eq("id", session.user.id)
+              .maybeSingle();
+
+            const orgId =
+              (profile as unknown as { org_id?: string | null } | null)?.org_id ?? null;
+
+            navigate(orgId ? "/dashboard" : "/signup");
         }
     };
     checkSession();
@@ -57,9 +66,23 @@ export default function LoginPage() {
       clearTimeout(timeoutId);
 
       if (authError) throw authError;
-      
-      // Force navigation
-      navigate('/dashboard');
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate("/dashboard");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("org_id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const orgId =
+        (profile as unknown as { org_id?: string | null } | null)?.org_id ?? null;
+
+      navigate(orgId ? "/dashboard" : "/signup");
     } catch (err: unknown) {
       clearTimeout(timeoutId);
       console.error(err);
@@ -137,9 +160,9 @@ export default function LoginPage() {
         </form>
 
         <div className="text-center text-sm text-zinc-400">
-          Don't have an account?{" "}
+          Need an admin account?{" "}
           <Link to="/signup" className="text-primary hover:underline">
-            Sign up
+            Sign up (admin)
           </Link>
         </div>
       </div>
