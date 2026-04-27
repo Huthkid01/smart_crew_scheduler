@@ -48,6 +48,7 @@ interface Employee {
 
 type EmployeeInsert = Database['public']['Tables']['employees']['Insert'];
 // type EmployeeUpdate = Database['public']['Tables']['employees']['Update'];
+type EmployeeUpdate = Database["public"]["Tables"]["employees"]["Update"];
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -83,6 +84,7 @@ export default function EmployeesPage() {
           .from('employees')
           .select('*')
           .eq('org_id', p.org_id)
+          .eq("is_active", true)
           .order('name');
 
         if (error) throw error;
@@ -188,9 +190,29 @@ export default function EmployeesPage() {
   };
 
   const handleDeleteEmployee = async (id: string) => {
-      if (!confirm("Are you sure you want to delete this employee?")) return;
+      if (!confirm("Remove this employee from your team? (Their time records will be kept.)")) return;
 
       try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            toast.error("You must be signed in to delete employees.");
+            return;
+          }
+
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role, org_id")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          const role = (profile as unknown as { role?: string | null } | null)?.role ?? null;
+          const currentOrgId = (profile as unknown as { org_id?: string | null } | null)?.org_id ?? null;
+
+          if (!currentOrgId || (role !== "admin" && role !== "manager")) {
+            toast.error("Only an admin/manager can delete employees. Finish account setup and try again.");
+            return;
+          }
+
           // 1. Get user_id to delete from Auth
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { data: empData } = await (supabase.from('employees') as any)
@@ -203,7 +225,7 @@ export default function EmployeesPage() {
           if ((empData as any)?.user_id) {
              const { data: { session } } = await supabase.auth.getSession();
              try {
-                 await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+                 const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -212,24 +234,35 @@ export default function EmployeesPage() {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     body: JSON.stringify({ user_id: (empData as any).user_id })
                  });
+                 if (!resp.ok) {
+                   const body = await resp.json().catch(() => ({}));
+                   console.error("Failed to delete auth user:", body);
+                 }
              } catch (err) {
                  console.error("Failed to delete auth user:", err);
                  // We continue to delete the record so they are removed from the list
              }
           }
 
+          // Keep history (time_entries references employees). So we soft-delete by marking inactive.
+          const updateData: EmployeeUpdate = { is_active: false };
           const { error } = await supabase
               .from('employees')
-              .delete()
+              .update(updateData)
               .eq('id', id);
           
           if (error) throw error;
 
           setEmployees(employees.filter(emp => emp.id !== id));
-          toast.success("Employee deleted successfully!");
+          toast.success("Employee removed successfully!");
       } catch (error) {
           console.error('Error deleting employee:', error);
-          toast.error('Failed to delete employee');
+          const messageValue =
+            error && typeof error === "object" && "message" in error
+              ? (error as { message?: unknown }).message
+              : undefined;
+          const msg = typeof messageValue === "string" ? messageValue : "Failed to delete employee";
+          toast.error(msg);
       }
   };
 
