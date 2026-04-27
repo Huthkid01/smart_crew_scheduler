@@ -62,6 +62,12 @@ export default function SignupPage() {
          throw new Error("Signup successful, but no user data returned. Please check your email for verification.");
       }
 
+      if (!authData.session) {
+        throw new Error(
+          "Signup created, but you are not signed in yet. Your Supabase project likely requires email confirmation. Please confirm your email, then sign in to continue (or disable email confirmation in Supabase Auth settings for instant signup)."
+        );
+      }
+
       // 2. Create organization
       const orgPayload: OrganizationInsert = { name: data.orgName };
       const { data: orgData, error: orgError } = await supabase
