@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Zap, Eye, EyeOff } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
+import type { Database } from "@/supabase/types";
 
 const signupSchema = z.object({
   orgName: z.string().min(2, "Organization name is required"),
@@ -22,6 +23,9 @@ const signupSchema = z.object({
 });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
+type OrganizationInsert = Database["public"]["Tables"]["organizations"]["Insert"];
+type OrganizationRow = Database["public"]["Tables"]["organizations"]["Row"];
+type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 
 export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -59,10 +63,10 @@ export default function SignupPage() {
       }
 
       // 2. Create organization
+      const orgPayload: OrganizationInsert = { name: data.orgName };
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .insert({ name: data.orgName } as any)
+        .insert(orgPayload)
         .select()
         .single();
           
@@ -73,43 +77,22 @@ export default function SignupPage() {
              throw new Error("Failed to create organization. Please try again.");
       }
 
-      // 3. Create profile linked to org
-      // Note: The handle_new_user trigger in schema.sql might have already created a profile.
-      // We should check if it exists and update it, or insert if not.
-      // However, since we want to link org_id and role 'admin', let's try to update it first.
-      
-      // Try to update existing profile first (created by trigger)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase.from('profiles') as any)
-        .update({
-           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-           org_id: (orgData as any)?.id,
-           full_name: data.fullName,
-           role: 'admin',
-           email: data.email,
-        })
-        .eq('id', authData.user.id)
-        .select()
-        .single();
+      // 3. Create/update profile linked to org (single upsert; avoids .single() 406 noise)
+      const profilePayload: ProfileInsert = {
+        id: authData.user.id,
+        org_id: (orgData as OrganizationRow).id,
+        full_name: data.fullName,
+        role: "admin",
+        email: data.email,
+      };
 
-      // If update didn't affect any rows (trigger didn't run or failed), insert manually
-      if (updateError) {
-        // Fallback to insert
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: profileError } = await (supabase.from('profiles') as any)
-          .insert({
-              id: authData.user.id,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              org_id: (orgData as any)?.id,
-              full_name: data.fullName,
-              role: 'admin',
-              email: data.email,
-          });
+      const { error: profileError } = await supabase.from("profiles").upsert(profilePayload, {
+        onConflict: "id",
+      });
 
-        if (profileError) {
-          console.error("Profile creation failed", profileError);
-          throw new Error("Failed to create profile. Please contact support.");
-        }
+      if (profileError) {
+        console.error("Profile upsert failed", profileError);
+        throw new Error("Failed to create profile. Please contact support.");
       }
 
       navigate('/dashboard');

@@ -1,9 +1,23 @@
--- Allow authenticated users to create organizations
-CREATE POLICY "Users can create organizations" ON organizations
-    FOR INSERT TO authenticated
-    WITH CHECK (true);
+ALTER TABLE IF EXISTS public.organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Allow authenticated users to insert their own profile (fallback if trigger fails)
-CREATE POLICY "Users can insert own profile" ON profiles
-    FOR INSERT TO authenticated
-    WITH CHECK (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can create organizations" ON public.organizations;
+CREATE POLICY "Users can create organizations" ON public.organizations
+  FOR INSERT TO authenticated
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+CREATE POLICY "Users can view own profile" ON public.profiles
+  FOR SELECT TO authenticated
+  USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile" ON public.profiles
+  FOR UPDATE TO authenticated
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+CREATE POLICY "Users can insert own profile" ON public.profiles
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = id);

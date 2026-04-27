@@ -37,6 +37,7 @@ const host = process.env.SUPABASE_DB_HOST || "aws-1-eu-north-1.pooler.supabase.c
 const user = process.env.SUPABASE_DB_USER || `postgres.${ref}`;
 
 const files = [
+  "20240227_fix_policies.sql",
   "20260408_handle_new_user_invite_metadata.sql",
   "20260409120000_enable_realtime_shifts_time_entries.sql",
   "20260409140000_time_off_requests.sql",
