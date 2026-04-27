@@ -160,9 +160,9 @@ export default function LoginPage() {
         </form>
 
         <div className="text-center text-sm text-zinc-400">
-          Need an admin account?{" "}
+          Create an admin account?{" "}
           <Link to="/signup" className="text-primary hover:underline">
-            Sign up (admin)
+            Sign up
           </Link>
         </div>
       </div>
