@@ -266,6 +266,52 @@ export default function EmployeesPage() {
       }
   };
 
+  const handleResendInvitation = async (employee: Employee) => {
+    try {
+      if (!orgId) {
+        toast.error("Finish account setup first, then try again.");
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast.error("You must be signed in to resend invitations.");
+        return;
+      }
+
+      const inviteResponse = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-employee`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            email: employee.email,
+            employee_id: employee.id,
+            org_id: orgId,
+            full_name: employee.name,
+          }),
+        }
+      );
+
+      if (!inviteResponse.ok) {
+        const errorData = await inviteResponse.json().catch(() => ({}));
+        const message =
+          typeof (errorData as { error?: unknown }).error === "string"
+            ? (errorData as { error: string }).error
+            : "Failed to send invitation";
+        throw new Error(message);
+      }
+
+      toast.success(`Invitation resent to ${employee.email}`);
+    } catch (error) {
+      console.error("Invitation resend failed:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to resend invitation");
+    }
+  };
+
   const openAddDialog = () => {
       setEditingEmployee(null);
       setIsAddOpen(true);
@@ -501,6 +547,12 @@ export default function EmployeesPage() {
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                 <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer" onClick={() => openEditDialog(employee)}>
                                     Edit employee
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="hover:bg-zinc-800 cursor-pointer"
+                                  onClick={() => handleResendInvitation(employee)}
+                                >
+                                  Resend invitation
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator className="bg-zinc-800" />
                                 <DropdownMenuItem className="text-red-500 hover:bg-red-900/20 hover:text-red-400 cursor-pointer" onClick={() => handleDeleteEmployee(employee.id)}>
