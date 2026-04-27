@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -23,6 +23,13 @@ const signupSchema = z.object({
 });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
+
+const completeSetupSchema = z.object({
+  orgName: z.string().min(2, "Organization name is required"),
+  fullName: z.string().min(2, "Full name is required"),
+});
+
+type CompleteSetupFormValues = z.infer<typeof completeSetupSchema>;
 type OrganizationInsert = Database["public"]["Tables"]["organizations"]["Insert"];
 type OrganizationRow = Database["public"]["Tables"]["organizations"]["Row"];
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
@@ -32,15 +39,45 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [mode, setMode] = useState<"signup" | "complete">("signup");
   const navigate = useNavigate();
   
-  const { register, handleSubmit, formState: { errors } } = useForm<SignupFormValues>({
+  const signupForm = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
   });
 
-  const onSubmit = async (data: SignupFormValues) => {
+  const completeForm = useForm<CompleteSetupFormValues>({
+    resolver: zodResolver(completeSetupSchema),
+  });
+
+  useEffect(() => {
+    const init = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
+      if (!session) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("org_id, role, full_name, email")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      const p = profile as unknown as { org_id?: string | null; role?: string | null; full_name?: string | null; email?: string | null } | null;
+
+      if (!p?.org_id) {
+        setMode("complete");
+        completeForm.setValue("fullName", p?.full_name ?? "");
+      }
+    };
+
+    init();
+  }, [completeForm]);
+
+  const onSignupSubmit = async (data: SignupFormValues) => {
     setIsLoading(true);
     setError(null);
+    setNotice(null);
 
     try {
       // 1. Create user
@@ -54,7 +91,13 @@ export default function SignupPage() {
         }
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        const msg = authError.message?.toLowerCase?.() ?? "";
+        if (msg.includes("already registered") || msg.includes("already exists")) {
+          throw new Error("This email already has an account (possibly invited). Please sign in instead.");
+        }
+        throw authError;
+      }
       
       // If no user object is returned (e.g. email confirmation required but not disabled),
       // we can't proceed.
@@ -63,9 +106,10 @@ export default function SignupPage() {
       }
 
       if (!authData.session) {
-        throw new Error(
-          "Signup created, but you are not signed in yet. Your Supabase project likely requires email confirmation. Please confirm your email, then sign in to continue (or disable email confirmation in Supabase Auth settings for instant signup)."
+        setNotice(
+          "Account created. Please check your email to confirm your account. After confirming, sign in, then return here to finish setup."
         );
+        return;
       }
 
       // 2. Create organization
@@ -111,6 +155,57 @@ export default function SignupPage() {
     }
   };
 
+  const onCompleteSubmit = async (data: CompleteSetupFormValues) => {
+    setIsLoading(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
+      if (!session) {
+        throw new Error("Please sign in to finish setup.");
+      }
+
+      const orgPayload: OrganizationInsert = { name: data.orgName };
+      const { data: orgData, error: orgError } = await supabase
+        .from("organizations")
+        .insert(orgPayload)
+        .select()
+        .single();
+
+      if (orgError || !orgData) {
+        console.error("Org creation failed", orgError);
+        throw new Error("Failed to create organization. Please try again.");
+      }
+
+      const profilePayload: ProfileInsert = {
+        id: session.user.id,
+        org_id: (orgData as OrganizationRow).id,
+        full_name: data.fullName,
+        role: "admin",
+        email: session.user.email ?? "",
+      };
+
+      const { error: profileError } = await supabase.from("profiles").upsert(profilePayload, {
+        onConflict: "id",
+      });
+
+      if (profileError) {
+        console.error("Profile upsert failed", profileError);
+        throw new Error("Failed to finish setup. Please contact support.");
+      }
+
+      navigate("/dashboard");
+    } catch (err: unknown) {
+      console.error(err);
+      const errorMessage = err instanceof Error ? err.message : "An error occurred during setup";
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-black p-4">
       <div className="w-full max-w-[400px] sm:max-w-md space-y-8 bg-zinc-900 p-6 sm:p-8 rounded-xl border border-zinc-800">
@@ -121,99 +216,158 @@ export default function SignupPage() {
             </div>
             <span className="text-xl font-bold text-white">SmartCrew Scheduler</span>
           </Link>
-          <h2 className="text-2xl font-bold text-white">Create your account</h2>
-          <p className="text-zinc-400 mt-2">Start managing your team intelligently</p>
+          <h2 className="text-2xl font-bold text-white">
+            {mode === "complete" ? "Complete your setup" : "Create your account"}
+          </h2>
+          <p className="text-zinc-400 mt-2">
+            {mode === "complete" ? "Finish setting up your organization" : "Start managing your team intelligently"}
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <div className="space-y-6">
+          {notice && (
+            <div className="p-3 bg-primary/10 border border-primary/20 rounded-md text-primary text-sm">
+              {notice}{" "}
+              <Link to="/login" className="underline">
+                Go to login
+              </Link>
+            </div>
+          )}
+
           {error && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-sm">
               {error}
             </div>
           )}
+
+          {mode === "complete" ? (
+            <form onSubmit={completeForm.handleSubmit(onCompleteSubmit)} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="orgName" className="text-white">Organization Name</Label>
+                <Input
+                  id="orgName"
+                  {...completeForm.register("orgName")}
+                  className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
+                  placeholder="Acme Corp"
+                />
+                {completeForm.formState.errors.orgName && (
+                  <p className="text-destructive text-xs">{completeForm.formState.errors.orgName.message}</p>
+                )}
+              </div>
           
-          <div className="space-y-2">
-            <Label htmlFor="orgName" className="text-white">Organization Name</Label>
-            <Input 
-              id="orgName" 
-              {...register("orgName")} 
-              className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
-              placeholder="Acme Corp"
-            />
-            {errors.orgName && <p className="text-destructive text-xs">{errors.orgName.message}</p>}
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="fullName" className="text-white">Full Name</Label>
+                <Input
+                  id="fullName"
+                  {...completeForm.register("fullName")}
+                  className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
+                  placeholder="John Doe"
+                />
+                {completeForm.formState.errors.fullName && (
+                  <p className="text-destructive text-xs">{completeForm.formState.errors.fullName.message}</p>
+                )}
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="fullName" className="text-white">Full Name</Label>
-            <Input 
-              id="fullName" 
-              {...register("fullName")} 
-              className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
-              placeholder="John Doe"
-            />
-            {errors.fullName && <p className="text-destructive text-xs">{errors.fullName.message}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-white">Email</Label>
-            <Input 
-              id="email" 
-              type="email" 
-              {...register("email")} 
-              className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
-              placeholder="john@example.com"
-            />
-            {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-white">Password</Label>
-            <div className="relative">
-              <Input 
-                id="password" 
-                type={showPassword ? "text" : "password"} 
-                {...register("password")} 
-                className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary pr-10"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-zinc-400 hover:text-white"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-black font-bold" disabled={isLoading}>
+                {isLoading ? <SmartCrewLogoMark size="xs" /> : "Finish Setup"}
               </Button>
-            </div>
-            {errors.password && <p className="text-destructive text-xs">{errors.password.message}</p>}
-          </div>
+            </form>
+          ) : (
+            <form onSubmit={signupForm.handleSubmit(onSignupSubmit)} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="orgName" className="text-white">Organization Name</Label>
+                <Input
+                  id="orgName"
+                  {...signupForm.register("orgName")}
+                  className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
+                  placeholder="Acme Corp"
+                />
+                {signupForm.formState.errors.orgName && (
+                  <p className="text-destructive text-xs">{signupForm.formState.errors.orgName.message}</p>
+                )}
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword" className="text-white">Confirm Password</Label>
-            <div className="relative">
-              <Input 
-                id="confirmPassword" 
-                type={showConfirmPassword ? "text" : "password"} 
-                {...register("confirmPassword")} 
-                className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary pr-10"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-zinc-400 hover:text-white"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              >
-                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <div className="space-y-2">
+                <Label htmlFor="fullName" className="text-white">Full Name</Label>
+                <Input
+                  id="fullName"
+                  {...signupForm.register("fullName")}
+                  className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
+                  placeholder="John Doe"
+                />
+                {signupForm.formState.errors.fullName && (
+                  <p className="text-destructive text-xs">{signupForm.formState.errors.fullName.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-white">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  {...signupForm.register("email")}
+                  className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
+                  placeholder="john@example.com"
+                />
+                {signupForm.formState.errors.email && (
+                  <p className="text-destructive text-xs">{signupForm.formState.errors.email.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-white">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    {...signupForm.register("password")}
+                    className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-zinc-400 hover:text-white"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {signupForm.formState.errors.password && (
+                  <p className="text-destructive text-xs">{signupForm.formState.errors.password.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-white">Confirm Password</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    {...signupForm.register("confirmPassword")}
+                    className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-zinc-400 hover:text-white"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {signupForm.formState.errors.confirmPassword && (
+                  <p className="text-destructive text-xs">{signupForm.formState.errors.confirmPassword.message}</p>
+                )}
+              </div>
+
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-black font-bold" disabled={isLoading}>
+                {isLoading ? <SmartCrewLogoMark size="xs" /> : "Sign Up"}
               </Button>
-            </div>
-            {errors.confirmPassword && <p className="text-destructive text-xs">{errors.confirmPassword.message}</p>}
-          </div>
-
-          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-black font-bold" disabled={isLoading}>
-            {isLoading ? <SmartCrewLogoMark size="xs" /> : "Sign Up"}
-          </Button>
-        </form>
+            </form>
+          )}
+        </div>
 
         <div className="text-center text-sm text-zinc-400">
           Already have an account?{" "}
