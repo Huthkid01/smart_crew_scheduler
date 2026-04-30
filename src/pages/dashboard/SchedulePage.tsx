@@ -60,6 +60,11 @@ export default function SchedulePage() {
   const [date, setDate] = useState(new Date());
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isAddShiftOpen, setIsAddShiftOpen] = useState(false);
+  const [addShiftEmployeeId, setAddShiftEmployeeId] = useState<string>("");
+  const [addShiftDate, setAddShiftDate] = useState<Date | undefined>(undefined);
+  const [addShiftDateOpen, setAddShiftDateOpen] = useState(false);
+  const [addShiftStartTime, setAddShiftStartTime] = useState<string>("");
+  const [addShiftEndTime, setAddShiftEndTime] = useState<string>("");
   const [isEditShiftOpen, setIsEditShiftOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<CalendarEvent | null>(null);
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
@@ -145,9 +150,36 @@ export default function SchedulePage() {
 
   async function handleAddShift(e: React.FormEvent) {
     e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
     
     try {
+        if (!addShiftDate) {
+            toast.error("Pick a date for the shift.");
+            return;
+        }
+
+        if (!addShiftEmployeeId) {
+            toast.error("Select an employee.");
+            return;
+        }
+
+        if (!addShiftStartTime || !addShiftEndTime) {
+            toast.error("Select a start and end time.");
+            return;
+        }
+
+        const [sh, sm] = addShiftStartTime.split(":").map((n) => Number(n));
+        const [eh, em] = addShiftEndTime.split(":").map((n) => Number(n));
+        const startMinutes = sh * 60 + sm;
+        const endMinutes = eh * 60 + em;
+        if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) {
+            toast.error("Invalid time selected.");
+            return;
+        }
+        if (endMinutes <= startMinutes) {
+            toast.error("End time must be after start time.");
+            return;
+        }
+
         const { data: sessionData } = await getSessionSafe();
         const user = sessionData.session?.user ?? null;
         if (!user) return;
@@ -164,10 +196,10 @@ export default function SchedulePage() {
 
         const newShift = {
             org_id: orgId,
-            employee_id: formData.get("employee") as string,
-            date: formData.get("date") as string,
-            start_time: formData.get("start_time") as string,
-            end_time: formData.get("end_time") as string,
+            employee_id: addShiftEmployeeId,
+            date: format(addShiftDate, "yyyy-MM-dd"),
+            start_time: addShiftStartTime,
+            end_time: addShiftEndTime,
             status: 'draft' // Default to draft for safety
         };
 
@@ -794,7 +826,19 @@ export default function SchedulePage() {
                         </DialogContent>
                     </Dialog>
 
-                    <Dialog open={isAddShiftOpen} onOpenChange={setIsAddShiftOpen}>
+                    <Dialog
+                        open={isAddShiftOpen}
+                        onOpenChange={(open) => {
+                            setIsAddShiftOpen(open);
+                            if (!open) {
+                                setAddShiftEmployeeId("");
+                                setAddShiftDate(undefined);
+                                setAddShiftDateOpen(false);
+                                setAddShiftStartTime("");
+                                setAddShiftEndTime("");
+                            }
+                        }}
+                    >
                         <DialogTrigger asChild>
                             <Button variant="outline" className="bg-zinc-800 hover:bg-zinc-700 transition-colors border-zinc-700 text-white hover:text-white gap-2">
                                 <Plus className="h-4 w-4" />
@@ -815,7 +859,7 @@ export default function SchedulePage() {
                                         Employee
                                         </Label>
                                         <div className="col-span-3">
-                                            <Select name="employee" required>
+                                            <Select value={addShiftEmployeeId} onValueChange={setAddShiftEmployeeId}>
                                                 <SelectTrigger className="bg-zinc-950 border-zinc-800">
                                                     <SelectValue placeholder="Select employee" />
                                                 </SelectTrigger>
@@ -831,19 +875,82 @@ export default function SchedulePage() {
                                         <Label htmlFor="date" className="text-right">
                                         Date
                                         </Label>
-                                        <Input id="date" name="date" type="date" className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                                        <div className="col-span-3">
+                                            <Popover open={addShiftDateOpen} onOpenChange={setAddShiftDateOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        className="w-full justify-start bg-zinc-950 border-zinc-800 text-white hover:bg-zinc-900"
+                                                    >
+                                                        <CalendarDays className="mr-2 h-4 w-4 text-zinc-400" />
+                                                        {addShiftDate ? format(addShiftDate, "PPP") : "Pick a date"}
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent align="start" className="w-auto p-2 bg-zinc-900 border-zinc-800 text-white">
+                                                    <DayPicker
+                                                        mode="single"
+                                                        selected={addShiftDate}
+                                                        onSelect={(d) => {
+                                                            setAddShiftDate(d);
+                                                            if (d) setAddShiftDateOpen(false);
+                                                        }}
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-4 items-center gap-4">
                                         <Label htmlFor="start_time" className="text-right">
                                         Start
                                         </Label>
-                                        <Input id="start_time" name="start_time" type="time" className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                                        <div className="col-span-3">
+                                            <Select value={addShiftStartTime} onValueChange={setAddShiftStartTime}>
+                                                <SelectTrigger className="bg-zinc-950 border-zinc-800">
+                                                    <SelectValue placeholder="Select time" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-zinc-800 border-zinc-700 text-white max-h-[240px] overflow-y-auto">
+                                                    {Array.from({ length: 288 }, (_, i) => {
+                                                        const totalMinutes = i * 5;
+                                                        const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+                                                        const mm = String(totalMinutes % 60).padStart(2, "0");
+                                                        const value = `${hh}:${mm}`;
+                                                        const label = moment(value, "HH:mm").format("h:mm A");
+                                                        return (
+                                                            <SelectItem key={value} value={value}>
+                                                                {label}
+                                                            </SelectItem>
+                                                        );
+                                                    })}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-4 items-center gap-4">
                                         <Label htmlFor="end_time" className="text-right">
                                         End
                                         </Label>
-                                        <Input id="end_time" name="end_time" type="time" className="col-span-3 bg-zinc-950 border-zinc-800" required />
+                                        <div className="col-span-3">
+                                            <Select value={addShiftEndTime} onValueChange={setAddShiftEndTime}>
+                                                <SelectTrigger className="bg-zinc-950 border-zinc-800">
+                                                    <SelectValue placeholder="Select time" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-zinc-800 border-zinc-700 text-white max-h-[240px] overflow-y-auto">
+                                                    {Array.from({ length: 288 }, (_, i) => {
+                                                        const totalMinutes = i * 5;
+                                                        const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+                                                        const mm = String(totalMinutes % 60).padStart(2, "0");
+                                                        const value = `${hh}:${mm}`;
+                                                        const label = moment(value, "HH:mm").format("h:mm A");
+                                                        return (
+                                                            <SelectItem key={value} value={value}>
+                                                                {label}
+                                                            </SelectItem>
+                                                        );
+                                                    })}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                 </div>
                                 <DialogFooter>
