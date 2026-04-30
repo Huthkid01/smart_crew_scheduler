@@ -6,7 +6,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, ChevronLeft, ChevronRight, Send, Trash2, CalendarDays } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
-import { supabase } from "@/supabase/client";
+import { getSessionSafe, supabase } from "@/supabase/client";
 import { format, parseISO } from "date-fns";
 import { DayPicker, type DateRange } from "react-day-picker";
 // import type { Database } from "@/supabase/types";
@@ -109,20 +109,21 @@ export default function SchedulePage() {
   /** One auth + profile read, then employees — avoids waiting on separate role/employee fetches before showing the toolbar. */
   async function loadScheduleContext() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: sessionData } = await getSessionSafe();
+      const user = sessionData.session?.user ?? null;
       if (!user) {
         setIsRoleLoading(false);
         return;
       }
 
-      const { data } = await supabase
+      const { data: profileData } = await supabase
         .from("profiles")
         .select("role, org_id")
         .eq("id", user.id)
         .single();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const row = data as any;
+      const row = profileData as any;
       setUserRole(row?.role || "employee");
 
       if (row?.org_id) {
@@ -147,7 +148,8 @@ export default function SchedulePage() {
     const formData = new FormData(e.target as HTMLFormElement);
     
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: sessionData } = await getSessionSafe();
+        const user = sessionData.session?.user ?? null;
         if (!user) return;
 
         const { data: profile } = await supabase
@@ -259,7 +261,8 @@ export default function SchedulePage() {
       setIsLoading(true);
 
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data } = await getSessionSafe();
+        const user = data.session?.user ?? null;
         if (!user) throw new Error("No user found");
 
         const { data: profile } = await supabase
@@ -545,7 +548,8 @@ export default function SchedulePage() {
     
     setIsPublishing(true);
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data } = await getSessionSafe();
+        const user = data.session?.user ?? null;
         if (!user) return;
 
         const { data: profile } = await supabase

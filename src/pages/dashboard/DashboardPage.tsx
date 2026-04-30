@@ -9,7 +9,7 @@ import ProfilePage from "./ProfilePage";
 import SettingsPage from "./SettingsPage";
 import EmployeeDashboard from "./EmployeeDashboard";
 import { useEffect, useState } from "react";
-import { supabase } from "@/supabase/client";
+import { getSessionSafe, supabase } from "@/supabase/client";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 
 export default function DashboardPage() {
@@ -19,18 +19,19 @@ export default function DashboardPage() {
   useEffect(() => {
     const checkRole = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-          
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const role = (data as any)?.role || 'employee';
-          setUserRole(role);
-        }
+        const { data } = await getSessionSafe();
+        const user = data.session?.user ?? null;
+        if (!user) return;
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        const role =
+          (profile as unknown as { role?: string | null } | null)?.role ?? "employee";
+        setUserRole(role);
       } catch (error) {
         console.error("Error checking role:", error);
       } finally {

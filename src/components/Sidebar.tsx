@@ -12,7 +12,7 @@ import {
   Zap,
   Building,
 } from "lucide-react";
-import { supabase } from "@/supabase/client";
+import { getSessionSafe, supabase } from "@/supabase/client";
 
 interface UserProfile {
   role: 'admin' | 'manager' | 'employee';
@@ -40,17 +40,23 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
 
   useEffect(() => {
     async function getUserRole() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
+      try {
+        const { data } = await getSessionSafe();
+        const user = data.session?.user ?? null;
+        if (!user) return;
+
+        const { data: profile } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', user.id)
-          .single();
-        if (data) {
-          const profile = data as UserProfile;
-          setUserRole(profile.role);
+          .maybeSingle();
+
+        if (profile) {
+          const p = profile as UserProfile;
+          setUserRole(p.role);
         }
+      } catch (error) {
+        console.error("Error loading sidebar role:", error);
       }
     }
     getUserRole();

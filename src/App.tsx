@@ -7,7 +7,7 @@ import SignupPage from "@/pages/auth/SignupPage";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
 import DashboardPage from "@/pages/dashboard/DashboardPage";
-import { supabase } from "@/supabase/client";
+import { getSessionSafe, supabase } from "@/supabase/client";
 
 function clearAuthStorage() {
   const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -26,11 +26,24 @@ function AuthWatcher() {
 
   useEffect(() => {
     const recover = async () => {
-      const { error } = await supabase.auth.getSession();
-      if (error && typeof error.message === "string" && error.message.toLowerCase().includes("invalid refresh token")) {
-        await supabase.auth.signOut();
-        clearAuthStorage();
-        navigate("/login");
+      try {
+        const { error } = await getSessionSafe();
+        if (error && typeof error.message === "string" && error.message.toLowerCase().includes("invalid refresh token")) {
+          await supabase.auth.signOut();
+          clearAuthStorage();
+          navigate("/login");
+        }
+      } catch (error) {
+        const messageValue =
+          error && typeof error === "object" && "message" in error
+            ? (error as { message?: unknown }).message
+            : undefined;
+        const message = typeof messageValue === "string" ? messageValue : "";
+        if (message.toLowerCase().includes("invalid refresh token")) {
+          await supabase.auth.signOut();
+          clearAuthStorage();
+          navigate("/login");
+        }
       }
     };
 
