@@ -12,6 +12,7 @@ import {
   Zap,
   Building,
   PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { getSessionSafe, supabase } from "@/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -106,17 +107,18 @@ export function Sidebar({
       )}
       
       <div className={cn(
-        "flex h-screen flex-col bg-zinc-950 border-r border-zinc-800 w-64 fixed left-0 top-0 z-50 transition-transform duration-300",
+        "flex h-screen flex-col bg-zinc-950 border-r border-zinc-800 fixed left-0 top-0 z-50 transition-all duration-300",
+        desktopOpen ? "w-64" : "w-16",
         isOpen ? "translate-x-0" : "-translate-x-full",
-        desktopOpen ? "md:translate-x-0" : "md:-translate-x-full"
+        "md:translate-x-0"
       )}>
-        <div className="p-6">
+        <div className={desktopOpen ? "p-6" : "p-4"}>
           <div className="flex items-center gap-2 justify-between">
             <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
               <Zap className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold text-white">SmartCrew</span>
+            <span className={desktopOpen ? "text-xl font-bold text-white" : "hidden"}>SmartCrew</span>
             </div>
             <Button
               type="button"
@@ -124,74 +126,84 @@ export function Sidebar({
               size="icon"
               className="hidden md:inline-flex text-zinc-400 hover:text-white hover:bg-zinc-900"
               onClick={() => onDesktopToggle?.()}
-              aria-label="Collapse sidebar"
+              aria-label={desktopOpen ? "Collapse sidebar" : "Expand sidebar"}
             >
-              <PanelLeftClose className="h-5 w-5" />
+              {desktopOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
             </Button>
           </div>
         </div>
         
-        <nav className="flex-1 px-4 space-y-2 mt-4">
+        <nav className={desktopOpen ? "flex-1 px-4 space-y-2 mt-4" : "flex-1 px-2 space-y-2 mt-4"}>
           {filteredNavigation.map((item) => (
             <NavLink
               key={item.name}
               to={item.href}
               end={item.end}
-              onClick={onClose} // Close sidebar on mobile when link is clicked
+              onClick={() => onClose?.()} // Close sidebar on mobile when link is clicked
+              title={!desktopOpen ? item.name : undefined}
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
                   isActive
                     ? "bg-primary/10 text-primary"
-                    : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                    : "text-zinc-400 hover:bg-zinc-900 hover:text-white",
+                  !desktopOpen && "justify-center px-0"
                 )
               }
             >
               <item.icon className="h-5 w-5" />
-              {item.name}
+              <span className={desktopOpen ? "inline" : "hidden"}>{item.name}</span>
             </NavLink>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-zinc-800 space-y-1">
+        <div className={desktopOpen ? "p-4 border-t border-zinc-800 space-y-1" : "p-2 border-t border-zinc-800 space-y-1"}>
           {userRole === 'admin' && (
                <NavLink 
                to="/dashboard/settings"
-               onClick={onClose}
+               onClick={() => onClose?.()}
+               title={!desktopOpen ? "Organization" : undefined}
                className={({ isActive }) =>
                  cn(
                    "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
                    isActive
                      ? "bg-primary/10 text-primary"
-                     : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                     : "text-zinc-400 hover:bg-zinc-900 hover:text-white",
+                    !desktopOpen && "justify-center px-0"
                  )
                }
              >
                <Building className="h-5 w-5" />
-               Organization
+               <span className={desktopOpen ? "inline" : "hidden"}>Organization</span>
              </NavLink>
           )}
           <NavLink 
             to="/dashboard/profile"
-            onClick={onClose}
+            onClick={() => onClose?.()}
+            title={!desktopOpen ? "Profile" : undefined}
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
                 isActive
                   ? "bg-primary/10 text-primary"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                  : "text-zinc-400 hover:bg-zinc-900 hover:text-white",
+                !desktopOpen && "justify-center px-0"
               )
             }
           >
             <Settings className="h-5 w-5" />
-            Profile
+            <span className={desktopOpen ? "inline" : "hidden"}>Profile</span>
           </NavLink>
           <button 
             onClick={handleSignOut}
-            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-400 hover:text-white w-full rounded-md hover:bg-zinc-900 transition-colors"
+            title={!desktopOpen ? "Sign Out" : undefined}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-400 hover:text-white w-full rounded-md hover:bg-zinc-900 transition-colors",
+              !desktopOpen && "justify-center px-0"
+            )}
           >
             <LogOut className="h-5 w-5" />
-            Sign Out
+            <span className={desktopOpen ? "inline" : "hidden"}>Sign Out</span>
           </button>
         </div>
       </div>

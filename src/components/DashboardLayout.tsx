@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { supabase } from "@/supabase/client";
-import { Menu, PanelLeftOpen, Zap } from "lucide-react";
+import { Menu, Zap } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { Button } from "@/components/ui/button";
 
@@ -68,22 +68,8 @@ export function DashboardLayout() {
         onDesktopToggle={() => setIsDesktopSidebarOpen((v) => !v)}
       />
       
-      <div className={isDesktopSidebarOpen ? "flex-1 md:ml-64 bg-zinc-950 min-h-screen" : "flex-1 md:ml-0 bg-zinc-950 min-h-screen"}>
+      <div className={isDesktopSidebarOpen ? "flex-1 md:ml-64 bg-zinc-950 min-h-screen" : "flex-1 md:ml-16 bg-zinc-950 min-h-screen"}>
         <main className="p-4 md:p-8 max-w-7xl mx-auto">
-          {!isDesktopSidebarOpen && (
-            <div className="hidden md:flex items-center mb-4">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="border border-zinc-800 bg-zinc-950/80 text-zinc-400 hover:text-white hover:bg-zinc-900"
-                onClick={() => setIsDesktopSidebarOpen(true)}
-                aria-label="Open sidebar"
-              >
-                <PanelLeftOpen className="h-5 w-5" />
-              </Button>
-            </div>
-          )}
           <Outlet />
         </main>
       </div>
