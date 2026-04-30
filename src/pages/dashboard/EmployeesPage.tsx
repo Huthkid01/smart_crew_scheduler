@@ -14,13 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -422,19 +415,14 @@ export default function EmployeesPage() {
                     <Label htmlFor="position" className="text-right">
                     Position
                     </Label>
-                     <div className="col-span-3">
-                        <Select name="position" defaultValue={editingEmployee?.position} required>
-                            <SelectTrigger className="bg-zinc-950 border-zinc-800">
-                                <SelectValue placeholder="Select a position" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                                <SelectItem value="Front of House">Front of House</SelectItem>
-                                <SelectItem value="Kitchen Staff">Kitchen Staff</SelectItem>
-                                <SelectItem value="Manager">Manager</SelectItem>
-                                <SelectItem value="Bartender">Bartender</SelectItem>
-                            </SelectContent>
-                        </Select>
-                     </div>
+                    <Input
+                      id="position"
+                      name="position"
+                      defaultValue={editingEmployee?.position}
+                      placeholder="e.g. Front of House"
+                      className="col-span-3 bg-zinc-950 border-zinc-800"
+                      required
+                    />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="rate" className="text-right">
