@@ -66,7 +66,8 @@ export default function Overview() {
 
     const { count: employeeCount } = await supabase
       .from('employees')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq("is_active", true);
 
     const { count: shiftCount } = await supabase
       .from('shifts')

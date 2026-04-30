@@ -41,7 +41,6 @@ interface Employee {
 
 type EmployeeInsert = Database['public']['Tables']['employees']['Insert'];
 // type EmployeeUpdate = Database['public']['Tables']['employees']['Update'];
-type EmployeeUpdate = Database["public"]["Tables"]["employees"]["Update"];
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -183,7 +182,7 @@ export default function EmployeesPage() {
   };
 
   const handleDeleteEmployee = async (id: string) => {
-      if (!confirm("Remove this employee from your team? (Their time records will be kept.)")) return;
+      if (!confirm("Are you sure you want to delete this employee? This will permanently delete their record.")) return;
 
       try {
           const { data: { user } } = await supabase.auth.getUser();
@@ -237,17 +236,27 @@ export default function EmployeesPage() {
              }
           }
 
-          // Keep history (time_entries references employees). So we soft-delete by marking inactive.
-          const updateData: EmployeeUpdate = { is_active: false };
           const { error } = await supabase
               .from('employees')
-              .update(updateData)
+              .delete()
               .eq('id', id);
           
-          if (error) throw error;
+          if (error) {
+            const codeValue =
+              error && typeof error === "object" && "code" in error
+                ? (error as { code?: unknown }).code
+                : undefined;
+            const code = typeof codeValue === "string" ? codeValue : "";
+            if (code === "23503") {
+              throw new Error(
+                "This employee has time tracking records. Run the latest Supabase migration to enable cascade deletes for time_entries, then try again."
+              );
+            }
+            throw error;
+          }
 
           setEmployees(employees.filter(emp => emp.id !== id));
-          toast.success("Employee removed successfully!");
+          toast.success("Employee deleted successfully!");
       } catch (error) {
           console.error('Error deleting employee:', error);
           const messageValue =

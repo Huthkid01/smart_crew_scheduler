@@ -7,6 +7,15 @@ create table if not exists time_entries (
   created_at timestamp with time zone default now()
 );
 
+alter table public.time_entries
+  drop constraint if exists time_entries_employee_id_fkey;
+
+alter table public.time_entries
+  add constraint time_entries_employee_id_fkey
+  foreign key (employee_id)
+  references public.employees(id)
+  on delete cascade;
+
 -- Enable RLS
 alter table time_entries enable row level security;
 
