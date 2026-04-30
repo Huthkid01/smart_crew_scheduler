@@ -11,8 +11,10 @@ import {
   LogOut,
   Zap,
   Building,
+  PanelLeftClose,
 } from "lucide-react";
 import { getSessionSafe, supabase } from "@/supabase/client";
+import { Button } from "@/components/ui/button";
 
 interface UserProfile {
   role: 'admin' | 'manager' | 'employee';
@@ -34,7 +36,17 @@ const navigation: NavItem[] = [
   { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, roles: ['admin', 'manager'] },
 ];
 
-export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
+export function Sidebar({
+  isOpen,
+  desktopOpen = true,
+  onClose,
+  onDesktopToggle,
+}: {
+  isOpen?: boolean;
+  desktopOpen?: boolean;
+  onClose?: () => void;
+  onDesktopToggle?: () => void;
+}) {
   const navigate = useNavigate();
   const [userRole, setUserRole] = useState<string | null>(null);
 
@@ -94,15 +106,28 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
       )}
       
       <div className={cn(
-        "flex h-screen flex-col bg-zinc-950 border-r border-zinc-800 w-64 fixed left-0 top-0 z-50 transition-transform duration-300 md:translate-x-0",
-        isOpen ? "translate-x-0" : "-translate-x-full"
+        "flex h-screen flex-col bg-zinc-950 border-r border-zinc-800 w-64 fixed left-0 top-0 z-50 transition-transform duration-300",
+        isOpen ? "translate-x-0" : "-translate-x-full",
+        desktopOpen ? "md:translate-x-0" : "md:-translate-x-full"
       )}>
         <div className="p-6">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 justify-between">
+            <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
               <Zap className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold text-white">SmartCrew</span>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="hidden md:inline-flex text-zinc-400 hover:text-white hover:bg-zinc-900"
+              onClick={() => onDesktopToggle?.()}
+              aria-label="Collapse sidebar"
+            >
+              <PanelLeftClose className="h-5 w-5" />
+            </Button>
           </div>
         </div>
         
