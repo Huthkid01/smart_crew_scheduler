@@ -61,8 +61,7 @@ export default function SchedulePage() {
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isAddShiftOpen, setIsAddShiftOpen] = useState(false);
   const [addShiftEmployeeId, setAddShiftEmployeeId] = useState<string>("");
-  const [addShiftDate, setAddShiftDate] = useState<Date | undefined>(undefined);
-  const [addShiftDateOpen, setAddShiftDateOpen] = useState(false);
+  const [addShiftDate, setAddShiftDate] = useState<string>("");
   const [addShiftStartTime, setAddShiftStartTime] = useState<string>("");
   const [addShiftEndTime, setAddShiftEndTime] = useState<string>("");
   const [isEditShiftOpen, setIsEditShiftOpen] = useState(false);
@@ -197,7 +196,7 @@ export default function SchedulePage() {
         const newShift = {
             org_id: orgId,
             employee_id: addShiftEmployeeId,
-            date: format(addShiftDate, "yyyy-MM-dd"),
+            date: addShiftDate,
             start_time: addShiftStartTime,
             end_time: addShiftEndTime,
             status: 'draft' // Default to draft for safety
@@ -832,8 +831,7 @@ export default function SchedulePage() {
                             setIsAddShiftOpen(open);
                             if (!open) {
                                 setAddShiftEmployeeId("");
-                                setAddShiftDate(undefined);
-                                setAddShiftDateOpen(false);
+                                setAddShiftDate("");
                                 setAddShiftStartTime("");
                                 setAddShiftEndTime("");
                             }
@@ -875,82 +873,69 @@ export default function SchedulePage() {
                                         <Label htmlFor="date" className="text-right">
                                         Date
                                         </Label>
-                                        <div className="col-span-3">
-                                            <Popover open={addShiftDateOpen} onOpenChange={setAddShiftDateOpen}>
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        className="w-full justify-start bg-zinc-950 border-zinc-800 text-white hover:bg-zinc-900"
-                                                    >
-                                                        <CalendarDays className="mr-2 h-4 w-4 text-zinc-400" />
-                                                        {addShiftDate ? format(addShiftDate, "PPP") : "Pick a date"}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent align="start" className="w-auto p-2 bg-zinc-900 border-zinc-800 text-white">
-                                                    <DayPicker
-                                                        mode="single"
-                                                        selected={addShiftDate}
-                                                        onSelect={(d) => {
-                                                            setAddShiftDate(d);
-                                                            if (d) setAddShiftDateOpen(false);
-                                                        }}
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                        </div>
+                                        <Input
+                                            id="date"
+                                            name="date"
+                                            type="date"
+                                            value={addShiftDate}
+                                            onChange={(e) => setAddShiftDate(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                const allowed = new Set(["Tab", "Shift", "Escape", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"]);
+                                                if (!allowed.has(e.key)) e.preventDefault();
+                                            }}
+                                            onBeforeInput={(e) => e.preventDefault()}
+                                            onPaste={(e) => e.preventDefault()}
+                                            onClick={(e) => (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()}
+                                            inputMode="none"
+                                            className="col-span-3 bg-zinc-950 border-zinc-800"
+                                            required
+                                        />
                                     </div>
                                     <div className="grid grid-cols-4 items-center gap-4">
                                         <Label htmlFor="start_time" className="text-right">
                                         Start
                                         </Label>
-                                        <div className="col-span-3">
-                                            <Select value={addShiftStartTime} onValueChange={setAddShiftStartTime}>
-                                                <SelectTrigger className="bg-zinc-950 border-zinc-800">
-                                                    <SelectValue placeholder="Select time" />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-zinc-800 border-zinc-700 text-white max-h-[240px] overflow-y-auto">
-                                                    {Array.from({ length: 288 }, (_, i) => {
-                                                        const totalMinutes = i * 5;
-                                                        const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
-                                                        const mm = String(totalMinutes % 60).padStart(2, "0");
-                                                        const value = `${hh}:${mm}`;
-                                                        const label = moment(value, "HH:mm").format("h:mm A");
-                                                        return (
-                                                            <SelectItem key={value} value={value}>
-                                                                {label}
-                                                            </SelectItem>
-                                                        );
-                                                    })}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                        <Input
+                                            id="start_time"
+                                            name="start_time"
+                                            type="time"
+                                            step="300"
+                                            value={addShiftStartTime}
+                                            onChange={(e) => setAddShiftStartTime(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                const allowed = new Set(["Tab", "Shift", "Escape", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"]);
+                                                if (!allowed.has(e.key)) e.preventDefault();
+                                            }}
+                                            onBeforeInput={(e) => e.preventDefault()}
+                                            onPaste={(e) => e.preventDefault()}
+                                            onClick={(e) => (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()}
+                                            inputMode="none"
+                                            className="col-span-3 bg-zinc-950 border-zinc-800"
+                                            required
+                                        />
                                     </div>
                                     <div className="grid grid-cols-4 items-center gap-4">
                                         <Label htmlFor="end_time" className="text-right">
                                         End
                                         </Label>
-                                        <div className="col-span-3">
-                                            <Select value={addShiftEndTime} onValueChange={setAddShiftEndTime}>
-                                                <SelectTrigger className="bg-zinc-950 border-zinc-800">
-                                                    <SelectValue placeholder="Select time" />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-zinc-800 border-zinc-700 text-white max-h-[240px] overflow-y-auto">
-                                                    {Array.from({ length: 288 }, (_, i) => {
-                                                        const totalMinutes = i * 5;
-                                                        const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
-                                                        const mm = String(totalMinutes % 60).padStart(2, "0");
-                                                        const value = `${hh}:${mm}`;
-                                                        const label = moment(value, "HH:mm").format("h:mm A");
-                                                        return (
-                                                            <SelectItem key={value} value={value}>
-                                                                {label}
-                                                            </SelectItem>
-                                                        );
-                                                    })}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                        <Input
+                                            id="end_time"
+                                            name="end_time"
+                                            type="time"
+                                            step="300"
+                                            value={addShiftEndTime}
+                                            onChange={(e) => setAddShiftEndTime(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                const allowed = new Set(["Tab", "Shift", "Escape", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"]);
+                                                if (!allowed.has(e.key)) e.preventDefault();
+                                            }}
+                                            onBeforeInput={(e) => e.preventDefault()}
+                                            onPaste={(e) => e.preventDefault()}
+                                            onClick={(e) => (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()}
+                                            inputMode="none"
+                                            className="col-span-3 bg-zinc-950 border-zinc-800"
+                                            required
+                                        />
                                     </div>
                                 </div>
                                 <DialogFooter>
