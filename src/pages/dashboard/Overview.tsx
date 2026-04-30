@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, DollarSign, Clock } from "lucide-react";
+import { Users, Calendar, DollarSign, Clock, ChevronDown } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { startOfWeek, endOfWeek, format, parse, differenceInMinutes } from "date-fns";
@@ -56,6 +56,13 @@ export default function Overview() {
 
     setActiveEmployees(activeData || []);
   }, []);
+
+  function formatClockTime(value: string | null | undefined) {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    return format(d, "h:mm a");
+  }
 
   const fetchShiftKpisAndUpcoming = useCallback(async () => {
     const today = new Date();
@@ -291,34 +298,46 @@ export default function Overview() {
                         ) : (
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             activeEmployees.map((entry: any) => (
-                                <div key={entry.id} className="flex items-center justify-between border-b border-zinc-800 pb-2 last:border-0">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs ${entry.clock_out ? 'bg-zinc-800 text-zinc-400' : 'bg-green-900/30 text-green-500'}`}>
-                                            {entry.employees?.name?.charAt(0) ?? "?"}
+                                <details key={entry.id} className="group border-b border-zinc-800 pb-2 last:border-0">
+                                    <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs ${entry.clock_out ? 'bg-zinc-800 text-zinc-400' : 'bg-green-900/30 text-green-500'}`}>
+                                                {entry.employees?.name?.charAt(0) ?? "?"}
+                                            </div>
+                                            <div>
+                                                <p className={`font-medium text-sm ${entry.clock_out ? 'text-zinc-400' : 'text-white'}`}>{entry.employees?.name}</p>
+                                                <p className="text-xs text-zinc-500">{entry.employees?.position}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className={`font-medium text-sm ${entry.clock_out ? 'text-zinc-400' : 'text-white'}`}>{entry.employees?.name}</p>
-                                            <p className="text-xs text-zinc-500">{entry.employees?.position}</p>
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-right">
+                                                {entry.clock_out ? (
+                                                    <>
+                                                        <p className="text-xs text-zinc-500 font-medium">Clocked Out</p>
+                                                        <p className="text-xs text-zinc-600">{formatClockTime(entry.clock_out)}</p>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <p className="text-xs text-green-400 font-medium">Clocked In</p>
+                                                        <p className="text-xs text-zinc-500">{formatClockTime(entry.clock_in)}</p>
+                                                    </>
+                                                )}
+                                            </div>
+                                            <ChevronDown className="h-4 w-4 text-zinc-500 transition-transform group-open:rotate-180" />
+                                        </div>
+                                    </summary>
+
+                                    <div className="mt-3 rounded-md border border-zinc-800 bg-zinc-950 p-3 text-sm">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-zinc-500">Clocked In</span>
+                                            <span className="text-white">{formatClockTime(entry.clock_in)}</span>
+                                        </div>
+                                        <div className="mt-2 flex items-center justify-between">
+                                            <span className="text-zinc-500">Clocked Out</span>
+                                            <span className="text-white">{formatClockTime(entry.clock_out)}</span>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        {entry.clock_out ? (
-                                            <>
-                                                <p className="text-xs text-zinc-500 font-medium">Clocked Out</p>
-                                                <p className="text-xs text-zinc-600">
-                                                    {format(new Date(entry.clock_out), 'h:mm a')}
-                                                </p>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <p className="text-xs text-green-400 font-medium">Clocked In</p>
-                                                <p className="text-xs text-zinc-500">
-                                                    {format(new Date(entry.clock_in), 'h:mm a')}
-                                                </p>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
+                                </details>
                             ))
                         )}
                     </div>
