@@ -67,22 +67,23 @@ export function DashboardLayout() {
         onClose={() => setIsSidebarOpen(false)}
         onDesktopToggle={() => setIsDesktopSidebarOpen((v) => !v)}
       />
-
-      {!isDesktopSidebarOpen && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="hidden md:inline-flex fixed top-4 left-4 z-50 bg-zinc-950/80 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900"
-          onClick={() => setIsDesktopSidebarOpen(true)}
-          aria-label="Open sidebar"
-        >
-          <PanelLeftOpen className="h-5 w-5" />
-        </Button>
-      )}
       
       <div className={isDesktopSidebarOpen ? "flex-1 md:ml-64 bg-zinc-950 min-h-screen" : "flex-1 md:ml-0 bg-zinc-950 min-h-screen"}>
         <main className="p-4 md:p-8 max-w-7xl mx-auto">
+          {!isDesktopSidebarOpen && (
+            <div className="hidden md:flex items-center mb-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="border border-zinc-800 bg-zinc-950/80 text-zinc-400 hover:text-white hover:bg-zinc-900"
+                onClick={() => setIsDesktopSidebarOpen(true)}
+                aria-label="Open sidebar"
+              >
+                <PanelLeftOpen className="h-5 w-5" />
+              </Button>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>
