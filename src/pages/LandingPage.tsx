@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Bot, Calendar, CheckCircle2, Clock, Users, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import type * as THREE_NS from "three";
 
 const FEATURE_ITEMS: { icon: LucideIcon; title: string; description: string }[] = [
   {
@@ -37,6 +38,198 @@ const FEATURE_ITEMS: { icon: LucideIcon; title: string; description: string }[] 
   },
 ];
 
+function Hero3DBackground() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    let rafId = 0;
+    let isRunning = !prefersReducedMotion;
+    let cleanup: undefined | (() => void);
+
+    const init = async () => {
+      type ThreeModule = typeof import("three");
+      const THREE = (await import("three")) as ThreeModule;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+      camera.position.set(0, 0, 5.2);
+
+      const renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: false,
+        powerPreference: "high-performance",
+      });
+      renderer.setClearColor(0x000000, 0);
+      renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1));
+      container.appendChild(renderer.domElement);
+
+      let group: THREE_NS.Group | undefined;
+
+      const disposeGroup = () => {
+        if (!group) return;
+        scene.remove(group);
+        group.traverse((obj) => {
+          const disposable = obj as unknown as {
+            geometry?: { dispose?: () => void };
+            material?: { dispose?: () => void };
+          };
+          disposable.geometry?.dispose?.();
+          disposable.material?.dispose?.();
+        });
+        group = undefined;
+      };
+
+      const buildScene = () => {
+        disposeGroup();
+        group = new THREE.Group();
+
+        const { width } = container.getBoundingClientRect();
+        const count = width < 640 ? 1600 : 3200;
+        const positions = new Float32Array(count * 3);
+        const colors = new Float32Array(count * 3);
+
+        const colorA = new THREE.Color(0x22c55e);
+        const colorB = new THREE.Color(0xffffff);
+
+        for (let i = 0; i < count; i++) {
+          const i3 = i * 3;
+          const r = 1.55 + Math.random() * 0.75;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+
+          const x = r * Math.sin(phi) * Math.cos(theta);
+          const y = r * Math.cos(phi);
+          const z = r * Math.sin(phi) * Math.sin(theta);
+
+          positions[i3] = x;
+          positions[i3 + 1] = y;
+          positions[i3 + 2] = z;
+
+          const mix = Math.random() * 0.75;
+          const c = colorA.clone().lerp(colorB, mix);
+          colors[i3] = c.r;
+          colors[i3 + 1] = c.g;
+          colors[i3 + 2] = c.b;
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+        const material = new THREE.PointsMaterial({
+          size: 0.02,
+          sizeAttenuation: true,
+          transparent: true,
+          opacity: 0.9,
+          vertexColors: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+
+        group.add(new THREE.Points(geometry, material));
+
+        const wireGeom = new THREE.IcosahedronGeometry(1.6, 1);
+        const wireMat = new THREE.MeshBasicMaterial({
+          color: 0x22c55e,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.16,
+        });
+        group.add(new THREE.Mesh(wireGeom, wireMat));
+
+        const wireGeom2 = new THREE.IcosahedronGeometry(2.35, 0);
+        const wireMat2 = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.05,
+        });
+        const outer = new THREE.Mesh(wireGeom2, wireMat2);
+        group.add(outer);
+
+        scene.add(group);
+      };
+
+      const resize = () => {
+        const rect = container.getBoundingClientRect();
+        const w = Math.max(1, Math.floor(rect.width));
+        const h = Math.max(1, Math.floor(rect.height));
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h, false);
+        buildScene();
+      };
+
+      const renderFrame = (time: number) => {
+        if (!group) return;
+        const t = time * 0.00035;
+        group.rotation.y = t * 0.8;
+        group.rotation.x = Math.sin(t * 0.9) * 0.22;
+        group.rotation.z = Math.cos(t * 0.6) * 0.08;
+        camera.position.z = 5.2 + Math.sin(t * 0.7) * 0.12;
+        renderer.render(scene, camera);
+      };
+
+      const loop = (time: number) => {
+        renderFrame(time);
+        if (!isRunning) return;
+        rafId = window.requestAnimationFrame(loop);
+      };
+
+      const onVisibilityChange = () => {
+        const shouldRun = !document.hidden && !prefersReducedMotion;
+        if (shouldRun === isRunning) return;
+        isRunning = shouldRun;
+        if (isRunning) {
+          rafId = window.requestAnimationFrame(loop);
+        } else {
+          window.cancelAnimationFrame(rafId);
+        }
+      };
+
+      resize();
+      window.addEventListener("resize", resize, { passive: true });
+      document.addEventListener("visibilitychange", onVisibilityChange);
+
+      if (prefersReducedMotion) {
+        renderFrame(0);
+      } else {
+        rafId = window.requestAnimationFrame(loop);
+      }
+
+      return () => {
+        window.cancelAnimationFrame(rafId);
+        window.removeEventListener("resize", resize);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        disposeGroup();
+        renderer.dispose();
+        if (renderer.domElement && renderer.domElement.parentNode) {
+          renderer.domElement.parentNode.removeChild(renderer.domElement);
+        }
+      };
+    };
+
+    void init().then((maybeCleanup) => {
+      cleanup = maybeCleanup;
+    });
+
+    return () => {
+      cleanup?.();
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} aria-hidden className="pointer-events-none absolute inset-0" />
+  );
+}
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black">
@@ -44,7 +237,8 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/20 via-black to-black opacity-50" />
+        <Hero3DBackground />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/10 via-black to-black opacity-60" />
         <div className="container mx-auto px-6 relative z-10 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
