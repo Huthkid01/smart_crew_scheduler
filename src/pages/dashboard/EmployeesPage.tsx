@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { supabase } from "@/supabase/client";
+import { getSessionSafe, supabase } from "@/supabase/client";
 import type { Database } from "@/supabase/types";
 import { toast } from "sonner";
 
@@ -144,7 +144,7 @@ export default function EmployeesPage() {
 
             // 2. Trigger invitation (via Edge Function)
             try {
-                const { data: { session } } = await supabase.auth.getSession();
+                const { data: { session } } = await getSessionSafe();
                 const inviteResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-employee`, {
                     method: 'POST',
                     headers: {
@@ -215,7 +215,7 @@ export default function EmployeesPage() {
           // 2. Delete from Auth (if linked)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if ((empData as any)?.user_id) {
-             const { data: { session } } = await supabase.auth.getSession();
+             const { data: { session } } = await getSessionSafe();
              try {
                  const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
                     method: 'POST',
@@ -275,7 +275,7 @@ export default function EmployeesPage() {
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSessionSafe();
       if (!session?.access_token) {
         toast.error("You must be signed in to resend invitations.");
         return;
@@ -330,7 +330,7 @@ export default function EmployeesPage() {
       const email = formData.get("email") as string;
       
       try {
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data: { session } } = await getSessionSafe();
           const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
             method: 'POST',
             headers: {

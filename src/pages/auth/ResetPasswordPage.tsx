@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Zap, Eye, EyeOff } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
-import { supabase } from "@/supabase/client";
+import { getSessionSafe, supabase } from "@/supabase/client";
 
 const resetPasswordSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -34,7 +34,7 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     // Check if we have a session (user is logged in via the magic link)
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSessionSafe();
       if (!session) {
         // If no session, they might have clicked an old link or are not authenticated properly
         // In a real app, we might want to redirect to login or show an error
@@ -118,6 +118,7 @@ export default function ResetPasswordPage() {
               <Input 
                 id="password" 
                 type={showPassword ? "text" : "password"} 
+                autoComplete="new-password"
                 {...register("password")} 
                 className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary pr-10"
               />
@@ -139,6 +140,7 @@ export default function ResetPasswordPage() {
             <Input 
               id="confirmPassword" 
               type="password" 
+              autoComplete="new-password"
               {...register("confirmPassword")} 
               className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
             />

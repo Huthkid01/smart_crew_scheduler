@@ -19,7 +19,12 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+let sessionInFlight: Promise<Awaited<ReturnType<typeof supabase.auth.getSession>>> | null = null;
+
 export async function getSessionSafe(retries = 2) {
+  if (sessionInFlight) return sessionInFlight;
+
+  sessionInFlight = (async () => {
   let lastError: unknown = null;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
@@ -40,4 +45,11 @@ export async function getSessionSafe(retries = 2) {
     }
   }
   throw lastError ?? new Error("Failed to get session");
+  })();
+
+  try {
+    return await sessionInFlight;
+  } finally {
+    sessionInFlight = null;
+  }
 }

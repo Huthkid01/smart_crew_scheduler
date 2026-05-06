@@ -79,6 +79,7 @@ export default function ForgotPasswordPage() {
             <Input 
               id="email" 
               type="email" 
+              autoComplete="email"
               {...register("email")} 
               className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
               placeholder="john@example.com"

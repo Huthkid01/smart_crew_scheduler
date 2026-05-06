@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Zap, Eye, EyeOff } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
-import { supabase } from "@/supabase/client";
+import { getSessionSafe, supabase } from "@/supabase/client";
 import type { Database } from "@/supabase/types";
 
 const signupSchema = z.object({
@@ -53,7 +53,7 @@ export default function SignupPage() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData } = await getSessionSafe();
       const session = sessionData.session;
       if (!session) return;
 
@@ -161,7 +161,7 @@ export default function SignupPage() {
     setNotice(null);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData } = await getSessionSafe();
       const session = sessionData.session;
       if (!session) {
         throw new Error("Please sign in to finish setup.");
@@ -246,6 +246,7 @@ export default function SignupPage() {
                 <Label htmlFor="orgName" className="text-white">Organization Name</Label>
                 <Input
                   id="orgName"
+                  autoComplete="organization"
                   {...completeForm.register("orgName")}
                   className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
                   placeholder="Acme Corp"
@@ -259,6 +260,7 @@ export default function SignupPage() {
                 <Label htmlFor="fullName" className="text-white">Full Name</Label>
                 <Input
                   id="fullName"
+                  autoComplete="name"
                   {...completeForm.register("fullName")}
                   className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
                   placeholder="John Doe"
@@ -278,6 +280,7 @@ export default function SignupPage() {
                 <Label htmlFor="orgName" className="text-white">Organization Name</Label>
                 <Input
                   id="orgName"
+                  autoComplete="organization"
                   {...signupForm.register("orgName")}
                   className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
                   placeholder="Acme Corp"
@@ -291,6 +294,7 @@ export default function SignupPage() {
                 <Label htmlFor="fullName" className="text-white">Full Name</Label>
                 <Input
                   id="fullName"
+                  autoComplete="name"
                   {...signupForm.register("fullName")}
                   className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
                   placeholder="John Doe"
@@ -305,6 +309,7 @@ export default function SignupPage() {
                 <Input
                   id="email"
                   type="email"
+                  autoComplete="email"
                   {...signupForm.register("email")}
                   className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
                   placeholder="john@example.com"
@@ -320,6 +325,7 @@ export default function SignupPage() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
                     {...signupForm.register("password")}
                     className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary pr-10"
                   />
@@ -344,6 +350,7 @@ export default function SignupPage() {
                   <Input
                     id="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
+                    autoComplete="new-password"
                     {...signupForm.register("confirmPassword")}
                     className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary pr-10"
                   />

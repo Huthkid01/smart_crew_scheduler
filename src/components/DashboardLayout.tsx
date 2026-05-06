@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
-import { supabase } from "@/supabase/client";
+import { getSessionSafe, supabase } from "@/supabase/client";
 import { Menu, Zap } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ export function DashboardLayout() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSessionSafe();
       if (!session) {
         navigate("/login");
       }

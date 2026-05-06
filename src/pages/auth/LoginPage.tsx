@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Zap, Eye, EyeOff } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
-import { supabase } from "@/supabase/client";
+import { getSessionSafe, supabase } from "@/supabase/client";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -30,7 +30,7 @@ export default function LoginPage() {
   // Check if already logged in
   useEffect(() => {
     const checkSession = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await getSessionSafe();
         if (session) {
             const { data: profile } = await supabase
               .from("profiles")
@@ -120,6 +120,7 @@ export default function LoginPage() {
             <Input 
               id="email" 
               type="email" 
+              autoComplete="email"
               {...register("email")} 
               className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary"
               placeholder="john@example.com"
@@ -138,6 +139,7 @@ export default function LoginPage() {
               <Input 
                 id="password" 
                 type={showPassword ? "text" : "password"} 
+                autoComplete="current-password"
                 {...register("password")} 
                 className="bg-zinc-950 border-zinc-800 text-white focus:ring-primary pr-10"
               />
