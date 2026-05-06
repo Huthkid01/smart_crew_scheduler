@@ -6,7 +6,48 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+type GenerateInviteLinkResult = {
+  user: { id: string } | null
+  properties?: { action_link?: string }
+}
+
+async function renderTemplate(templatePath: URL, variables: Record<string, string>) {
+  const raw = await Deno.readTextFile(templatePath)
+  return raw.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match: string, key: string) => {
+    const value = variables[String(key)]
+    return typeof value === 'string' ? value : match
+  })
+}
+
+async function sendEmailWithResend(args: { to: string; subject: string; html: string }) {
+  const apiKey = Deno.env.get('RESEND_API_KEY')
+  if (!apiKey) {
+    throw new Error('Missing RESEND_API_KEY')
+  }
+
+  const from = Deno.env.get('RESEND_FROM') || 'SmartCrew <onboarding@resend.dev>'
+
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [args.to],
+      subject: args.subject,
+      html: args.html,
+    }),
+  })
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '')
+    throw new Error(`Resend error: ${resp.status} ${resp.statusText}${text ? ` - ${text}` : ''}`)
+  }
+}
+
+serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -43,21 +84,50 @@ serve(async (req) => {
     // 3) http://localhost:5173 — Vite default; only used for local dev when 1 and 2 are missing.
     const siteBase = (Deno.env.get('SITE_URL') || req.headers.get('origin') || 'http://localhost:5173').replace(/\/$/, '')
 
-    // 2. Invite user via Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        data: {
-            employee_id: employee_id,
-            org_id: org_id,
-            role: 'employee',
-            full_name: displayName,
-            name: displayName,
-        },
-        redirectTo: `${siteBase}/reset-password`
-    })
+    const shouldUseResend = Boolean(Deno.env.get('RESEND_API_KEY'))
+    const redirectTo = `${siteBase}/reset-password`
+    const userData = {
+      employee_id: employee_id,
+      org_id: org_id,
+      role: 'employee',
+      full_name: displayName,
+      name: displayName,
+    }
 
-    if (authError) {
-        console.error("Supabase Auth Error:", authError);
-        throw authError;
+    let authData: { user: { id: string } | null } = { user: null }
+    let inviteLink: string | null = null
+
+    if (shouldUseResend) {
+      const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'invite',
+        email,
+        options: {
+          data: userData,
+          redirectTo,
+        },
+      } as unknown as { type: 'invite'; email: string; options: { data: typeof userData; redirectTo: string } })
+
+      if (error) {
+        console.error("Supabase Auth Error:", error);
+        throw error;
+      }
+
+      const result = data as unknown as GenerateInviteLinkResult | null | undefined
+      authData = { user: result?.user ?? null }
+      inviteLink = result?.properties?.action_link ?? null
+    } else {
+      // 2. Invite user via Supabase Auth (uses Supabase email templates)
+      const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        data: userData,
+        redirectTo,
+      })
+
+      if (error) {
+        console.error("Supabase Auth Error:", error);
+        throw error;
+      }
+
+      authData = { user: data.user ?? null }
     }
 
     // 3. Update employee record with the new user_id
@@ -76,6 +146,24 @@ serve(async (req) => {
         }
     }
 
+    if (shouldUseResend) {
+      if (!inviteLink) {
+        throw new Error('Invite link was not generated')
+      }
+
+      const html = await renderTemplate(new URL("./templates/invite-employee.html", import.meta.url), {
+        app_name: "SmartCrew Scheduler",
+        invite_url: inviteLink,
+        employee_name: displayName,
+      })
+
+      await sendEmailWithResend({
+        to: email,
+        subject: "You’re invited to SmartCrew Scheduler",
+        html,
+      })
+    }
+
     return new Response(
       JSON.stringify({ message: "Invitation sent successfully", user: authData.user }),
       {
@@ -83,10 +171,11 @@ serve(async (req) => {
         status: 200,
       }
     )
-  } catch (error: any) {
-    console.error("Function Error:", error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error("Function Error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,

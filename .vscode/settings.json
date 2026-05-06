@@ -1,0 +1,13 @@
+{
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+  "files.associations": {
+    "*.sql": "postgresql"
+  },
+  "deno.enable": true,
+  "deno.enablePaths": ["supabase/functions"],
+  "deno.importMap": "supabase/functions/import_map.json",
+  "deno.lint": true,
+  "deno.unstable": true
+}
