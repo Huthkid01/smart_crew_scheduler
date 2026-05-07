@@ -3,9 +3,16 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Bot, Calendar, CheckCircle2, Clock, Users, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "react-router-dom";
 import type * as THREE_NS from "three";
+
+declare global {
+  interface Window {
+    Tawk_API?: Record<string, unknown>;
+    Tawk_LoadStart?: Date;
+  }
+}
 
 const FEATURE_ITEMS: { icon: LucideIcon; title: string; description: string }[] = [
   {
@@ -40,11 +47,10 @@ const FEATURE_ITEMS: { icon: LucideIcon; title: string; description: string }[] 
 
 function Hero3DBackground() {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    const prefersReducedMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    const prefersReducedMotion = reduceMotion;
 
     const container = containerRef.current;
     if (!container) return;
@@ -71,6 +77,19 @@ function Hero3DBackground() {
       container.appendChild(renderer.domElement);
 
       let group: THREE_NS.Group | undefined;
+      let tiles: THREE_NS.InstancedMesh | undefined;
+      let ring: THREE_NS.Mesh | undefined;
+      let tileBaseX: Float32Array | undefined;
+      let tileBaseY: Float32Array | undefined;
+      let tileBaseZ: Float32Array | undefined;
+      let tileAngle: Float32Array | undefined;
+      let tilePhase: Float32Array | undefined;
+      let tileDummy: THREE_NS.Object3D | undefined;
+
+      let mouseTargetX = 0;
+      let mouseTargetY = 0;
+      let mouseX = 0;
+      let mouseY = 0;
 
       const disposeGroup = () => {
         if (!group) return;
@@ -84,6 +103,14 @@ function Hero3DBackground() {
           disposable.material?.dispose?.();
         });
         group = undefined;
+        tiles = undefined;
+        ring = undefined;
+        tileBaseX = undefined;
+        tileBaseY = undefined;
+        tileBaseZ = undefined;
+        tileAngle = undefined;
+        tilePhase = undefined;
+        tileDummy = undefined;
       };
 
       const buildScene = () => {
@@ -154,6 +181,66 @@ function Hero3DBackground() {
         const outer = new THREE.Mesh(wireGeom2, wireMat2);
         group.add(outer);
 
+        const tileCount = width < 640 ? 72 : 120;
+        tileBaseX = new Float32Array(tileCount);
+        tileBaseY = new Float32Array(tileCount);
+        tileBaseZ = new Float32Array(tileCount);
+        tileAngle = new Float32Array(tileCount);
+        tilePhase = new Float32Array(tileCount);
+        tileDummy = new THREE.Object3D();
+
+        const tileGeom = new THREE.BoxGeometry(0.26, 0.14, 0.06);
+        const tileMat = new THREE.MeshBasicMaterial({
+          transparent: true,
+          opacity: 0.6,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          vertexColors: true,
+        });
+        tiles = new THREE.InstancedMesh(tileGeom, tileMat, tileCount);
+        tiles.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+        const tileColorA = new THREE.Color(0x22c55e);
+        const tileColorB = new THREE.Color(0xffffff);
+
+        for (let i = 0; i < tileCount; i++) {
+          const a = (i / tileCount) * Math.PI * 2;
+          const r = 1.75 + Math.random() * 0.95;
+          const x = Math.cos(a) * r;
+          const z = Math.sin(a) * r;
+          const y = (Math.random() - 0.5) * 0.75;
+
+          tileBaseX[i] = x;
+          tileBaseY[i] = y;
+          tileBaseZ[i] = z;
+          tileAngle[i] = a;
+          tilePhase[i] = Math.random() * Math.PI * 2;
+
+          const mix = Math.random() * 0.45;
+          tiles.setColorAt(i, tileColorA.clone().lerp(tileColorB, mix));
+
+          tileDummy.position.set(x, y, z);
+          tileDummy.rotation.set(0.35, a, 0);
+          tileDummy.scale.set(1, 1, 1);
+          tileDummy.updateMatrix();
+          tiles.setMatrixAt(i, tileDummy.matrix);
+        }
+        tiles.instanceMatrix.needsUpdate = true;
+        if (tiles.instanceColor) tiles.instanceColor.needsUpdate = true;
+        group.add(tiles);
+
+        const ringGeom = new THREE.TorusGeometry(1.28, 0.02, 6, width < 640 ? 120 : 180);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0x22c55e,
+          transparent: true,
+          opacity: 0.2,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        ring = new THREE.Mesh(ringGeom, ringMat);
+        ring.rotation.x = Math.PI / 2.45;
+        group.add(ring);
+
         scene.add(group);
       };
 
@@ -170,10 +257,42 @@ function Hero3DBackground() {
       const renderFrame = (time: number) => {
         if (!group) return;
         const t = time * 0.00035;
-        group.rotation.y = t * 0.8;
-        group.rotation.x = Math.sin(t * 0.9) * 0.22;
+        const t2 = time * 0.001;
+
+        mouseX += (mouseTargetX - mouseX) * 0.06;
+        mouseY += (mouseTargetY - mouseY) * 0.06;
+
+        group.rotation.y = t * 0.75 + mouseX * 0.2;
+        group.rotation.x = Math.sin(t * 0.9) * 0.22 - mouseY * 0.18;
         group.rotation.z = Math.cos(t * 0.6) * 0.08;
+
+        if (tiles && tileDummy && tileBaseX && tileBaseY && tileBaseZ && tileAngle && tilePhase) {
+          const n = tileBaseX.length;
+          for (let i = 0; i < n; i++) {
+            const phase = tilePhase[i];
+            const bob = Math.sin(t2 * 0.9 + phase) * 0.12;
+            const wobble = Math.cos(t2 * 0.7 + phase) * 0.08;
+            const pulse = 1 + Math.sin(t2 * 0.6 + phase) * 0.06;
+
+            tileDummy.position.set(tileBaseX[i], tileBaseY[i] + bob, tileBaseZ[i]);
+            tileDummy.rotation.set(0.32 + wobble, tileAngle[i] + t * 0.6, wobble * 0.25);
+            tileDummy.scale.set(1, pulse, 1);
+            tileDummy.updateMatrix();
+            tiles.setMatrixAt(i, tileDummy.matrix);
+          }
+          tiles.instanceMatrix.needsUpdate = true;
+        }
+
+        if (ring) {
+          const pulse = 1 + Math.sin(t2 * 0.55) * 0.025;
+          ring.scale.setScalar(pulse);
+          ring.rotation.z = t * 1.1;
+        }
+
+        camera.position.x = mouseX * 0.65;
+        camera.position.y = -mouseY * 0.35;
         camera.position.z = 5.2 + Math.sin(t * 0.7) * 0.12;
+        camera.lookAt(0, 0, 0);
         renderer.render(scene, camera);
       };
 
@@ -194,9 +313,22 @@ function Hero3DBackground() {
         }
       };
 
+      const onPointerMove = (event: PointerEvent) => {
+        const rect = container.getBoundingClientRect();
+        const w = Math.max(1, rect.width);
+        const h = Math.max(1, rect.height);
+        const nx = (event.clientX - rect.left) / w - 0.5;
+        const ny = (event.clientY - rect.top) / h - 0.5;
+        mouseTargetX = Math.max(-0.5, Math.min(0.5, nx));
+        mouseTargetY = Math.max(-0.5, Math.min(0.5, ny));
+      };
+
       resize();
       window.addEventListener("resize", resize, { passive: true });
       document.addEventListener("visibilitychange", onVisibilityChange);
+      if (!prefersReducedMotion) {
+        window.addEventListener("pointermove", onPointerMove, { passive: true });
+      }
 
       if (prefersReducedMotion) {
         renderFrame(0);
@@ -205,6 +337,211 @@ function Hero3DBackground() {
       }
 
       return () => {
+        window.cancelAnimationFrame(rafId);
+        window.removeEventListener("resize", resize);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        window.removeEventListener("pointermove", onPointerMove);
+        disposeGroup();
+        renderer.dispose();
+        if (renderer.domElement && renderer.domElement.parentNode) {
+          renderer.domElement.parentNode.removeChild(renderer.domElement);
+        }
+      };
+    };
+
+    void init().then((maybeCleanup) => {
+      cleanup = maybeCleanup;
+    });
+
+    return () => {
+      cleanup?.();
+    };
+  }, [reduceMotion]);
+
+  return (
+    <div ref={containerRef} aria-hidden className="pointer-events-none absolute inset-0" />
+  );
+}
+
+function CTA3DBackground() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let rafId = 0;
+    let cleanup: undefined | (() => void);
+
+    const init = async () => {
+      type ThreeModule = typeof import("three");
+      const THREE = (await import("three")) as ThreeModule;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+      camera.position.set(0, 0.2, 4.6);
+
+      const renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: false,
+        powerPreference: "high-performance",
+      });
+      renderer.setClearColor(0x000000, 0);
+      renderer.setPixelRatio(Math.min(1.35, window.devicePixelRatio || 1));
+      container.appendChild(renderer.domElement);
+
+      let group: THREE_NS.Group | undefined;
+      let isVisible = true;
+      let isRunning = !reduceMotion;
+
+      const disposeGroup = () => {
+        if (!group) return;
+        scene.remove(group);
+        group.traverse((obj) => {
+          const disposable = obj as unknown as {
+            geometry?: { dispose?: () => void };
+            material?: { dispose?: () => void };
+          };
+          disposable.geometry?.dispose?.();
+          disposable.material?.dispose?.();
+        });
+        group = undefined;
+      };
+
+      const buildScene = () => {
+        disposeGroup();
+        group = new THREE.Group();
+
+        const { width } = container.getBoundingClientRect();
+        const count = width < 640 ? 900 : 1700;
+        const positions = new Float32Array(count * 3);
+        const colors = new Float32Array(count * 3);
+
+        const colorA = new THREE.Color(0x22c55e);
+        const colorB = new THREE.Color(0xffffff);
+
+        for (let i = 0; i < count; i++) {
+          const i3 = i * 3;
+          const r = 1.2 + Math.random() * 1.25;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+
+          positions[i3] = r * Math.sin(phi) * Math.cos(theta);
+          positions[i3 + 1] = r * Math.cos(phi) * 0.85;
+          positions[i3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+
+          const mix = Math.random() * 0.65;
+          const c = colorA.clone().lerp(colorB, mix);
+          colors[i3] = c.r;
+          colors[i3 + 1] = c.g;
+          colors[i3 + 2] = c.b;
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+        const material = new THREE.PointsMaterial({
+          size: 0.018,
+          sizeAttenuation: true,
+          transparent: true,
+          opacity: 0.85,
+          vertexColors: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        group.add(new THREE.Points(geometry, material));
+
+        const knotGeom = new THREE.TorusKnotGeometry(0.95, 0.28, width < 640 ? 80 : 110, 12);
+        const knotMat = new THREE.MeshBasicMaterial({
+          color: 0x22c55e,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.12,
+        });
+        const knot = new THREE.Mesh(knotGeom, knotMat);
+        knot.rotation.x = Math.PI / 2.8;
+        group.add(knot);
+
+        const ringGeom = new THREE.TorusGeometry(1.55, 0.02, 6, width < 640 ? 120 : 180);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.05,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const ring = new THREE.Mesh(ringGeom, ringMat);
+        ring.rotation.x = Math.PI / 2.25;
+        group.add(ring);
+
+        scene.add(group);
+      };
+
+      const resize = () => {
+        const rect = container.getBoundingClientRect();
+        const w = Math.max(1, Math.floor(rect.width));
+        const h = Math.max(1, Math.floor(rect.height));
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h, false);
+        buildScene();
+      };
+
+      const updateRunning = () => {
+        const shouldRun = isVisible && !document.hidden && !reduceMotion;
+        if (shouldRun === isRunning) return;
+        isRunning = shouldRun;
+        if (isRunning) {
+          rafId = window.requestAnimationFrame(loop);
+        } else {
+          window.cancelAnimationFrame(rafId);
+        }
+      };
+
+      const renderFrame = (time: number) => {
+        if (!group) return;
+        const t = time * 0.00028;
+        const pulse = 1 + Math.sin(time * 0.00055) * 0.02;
+        group.rotation.y = t * 1.15;
+        group.rotation.x = Math.sin(t * 0.9) * 0.12;
+        group.scale.setScalar(pulse);
+        renderer.render(scene, camera);
+      };
+
+      const loop = (time: number) => {
+        renderFrame(time);
+        if (!isRunning) return;
+        rafId = window.requestAnimationFrame(loop);
+      };
+
+      const onVisibilityChange = () => {
+        updateRunning();
+      };
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          isVisible = Boolean(entry?.isIntersecting);
+          updateRunning();
+        },
+        { threshold: 0.08 },
+      );
+      observer.observe(container);
+
+      resize();
+      window.addEventListener("resize", resize, { passive: true });
+      document.addEventListener("visibilitychange", onVisibilityChange);
+
+      if (reduceMotion) {
+        renderFrame(0);
+      } else {
+        rafId = window.requestAnimationFrame(loop);
+      }
+
+      return () => {
+        observer.disconnect();
         window.cancelAnimationFrame(rafId);
         window.removeEventListener("resize", resize);
         document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -223,14 +560,201 @@ function Hero3DBackground() {
     return () => {
       cleanup?.();
     };
-  }, []);
+  }, [reduceMotion]);
 
   return (
-    <div ref={containerRef} aria-hidden className="pointer-events-none absolute inset-0" />
+    <div ref={containerRef} aria-hidden className="pointer-events-none absolute inset-0 opacity-80" />
+  );
+}
+
+function useTawkToWidget() {
+  useEffect(() => {
+    const propertyId = (import.meta.env.VITE_TAWK_PROPERTY_ID as string | undefined) ?? "";
+    const widgetId = (import.meta.env.VITE_TAWK_WIDGET_ID as string | undefined) ?? "";
+
+    if (!propertyId || !widgetId) return;
+    if (typeof window === "undefined") return;
+
+    const existing = document.getElementById("tawkto-script");
+    const show = () => {
+      const api = window.Tawk_API;
+      const showWidget = typeof api?.showWidget === "function" ? (api.showWidget as () => void) : undefined;
+      showWidget?.();
+    };
+    const hide = () => {
+      const api = window.Tawk_API;
+      const hideWidget = typeof api?.hideWidget === "function" ? (api.hideWidget as () => void) : undefined;
+      hideWidget?.();
+    };
+
+    if (existing) {
+      show();
+      return () => {
+        hide();
+      };
+    }
+
+    window.Tawk_API = window.Tawk_API ?? {};
+    window.Tawk_LoadStart = new Date();
+    (window.Tawk_API as Record<string, unknown>).onLoad = () => {
+      show();
+    };
+
+    const script = document.createElement("script");
+    script.id = "tawkto-script";
+    script.async = true;
+    script.src = `https://embed.tawk.to/${propertyId}/${widgetId}`;
+    script.charset = "UTF-8";
+    script.setAttribute("crossorigin", "*");
+    script.addEventListener("load", show);
+
+    const firstScript = document.getElementsByTagName("script")[0];
+    if (firstScript?.parentNode) {
+      firstScript.parentNode.insertBefore(script, firstScript);
+    } else {
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      hide();
+    };
+  }, []);
+}
+
+function FloatingHeroBadges() {
+  const reduceMotion = useReducedMotion();
+
+  const floatA = reduceMotion
+    ? undefined
+    : {
+        y: [0, -10, 0],
+        rotate: [0, -2, 0],
+        transition: { duration: 6.5, repeat: Infinity, ease: "easeInOut" as const },
+      };
+
+  const floatB = reduceMotion
+    ? undefined
+    : {
+        y: [0, 12, 0],
+        rotate: [0, 3, 0],
+        transition: { duration: 8, repeat: Infinity, ease: "easeInOut" as const, delay: 0.3 },
+      };
+
+  const floatC = reduceMotion
+    ? undefined
+    : {
+        y: [0, -8, 0],
+        rotate: [0, 2, 0],
+        transition: { duration: 7.2, repeat: Infinity, ease: "easeInOut" as const, delay: 0.6 },
+      };
+
+  const badgeClass =
+    "pointer-events-none select-none rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md shadow-[0_0_60px_rgba(34,197,94,0.15)]";
+
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 z-[5]">
+      <motion.div
+        animate={floatA}
+        className={`${badgeClass} absolute left-6 top-24 hidden items-center gap-3 px-4 py-3 md:flex`}
+      >
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+          <Calendar className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="text-sm font-semibold text-white">Drag & drop</div>
+          <div className="text-xs text-gray-400">Smart calendar</div>
+        </div>
+      </motion.div>
+
+      <motion.div
+        animate={floatB}
+        className={`${badgeClass} absolute right-6 top-28 hidden items-center gap-3 px-4 py-3 md:flex`}
+      >
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+          <Clock className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="text-sm font-semibold text-white">Real-time</div>
+          <div className="text-xs text-gray-400">Shift updates</div>
+        </div>
+      </motion.div>
+
+      <motion.div
+        animate={floatC}
+        className={`${badgeClass} absolute bottom-10 left-1/2 hidden -translate-x-1/2 items-center gap-3 px-4 py-3 md:flex`}
+      >
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+          <Users className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="text-sm font-semibold text-white">Team-ready</div>
+          <div className="text-xs text-gray-400">Invite & notify</div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function ScheduleMiniPreview() {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-xl border border-white/10 bg-black/30 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-sm font-semibold text-white">Schedule preview</div>
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <span className="h-2 w-2 rounded-full bg-primary" />
+          <span>Live updates</span>
+        </div>
+      </div>
+
+      <div className="mb-2 grid grid-cols-7 gap-1 text-[10px] text-gray-500">
+        {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+          <div key={`${d}-${i}`} className="text-center">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="relative h-20 rounded-lg bg-white/5">
+        {!reduceMotion && (
+          <motion.div
+            className="absolute inset-0 opacity-40"
+            animate={{ x: ["-35%", "35%"] }}
+            transition={{ duration: 4.5, repeat: Infinity, ease: "linear" }}
+            style={{
+              background:
+                "linear-gradient(90deg, transparent, rgba(34,197,94,0.18), transparent)",
+            }}
+          />
+        )}
+
+        <motion.div
+          className="absolute left-[6%] top-[14%] h-3 rounded-md bg-primary/70"
+          animate={reduceMotion ? undefined : { x: [0, 10, 0] }}
+          transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
+          style={{ width: "56%" }}
+        />
+        <motion.div
+          className="absolute left-[22%] top-[42%] h-3 rounded-md bg-white/35"
+          animate={reduceMotion ? undefined : { x: [0, -8, 0] }}
+          transition={{ duration: 4.1, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+          style={{ width: "44%" }}
+        />
+        <motion.div
+          className="absolute left-[12%] top-[70%] h-3 rounded-md bg-primary/45"
+          animate={reduceMotion ? undefined : { x: [0, 6, 0] }}
+          transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+          style={{ width: "64%" }}
+        />
+      </div>
+    </div>
   );
 }
 
 export default function LandingPage() {
+  useTawkToWidget();
+
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black">
       <Navbar />
@@ -239,6 +763,7 @@ export default function LandingPage() {
       <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
         <Hero3DBackground />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/10 via-black to-black opacity-60" />
+        <FloatingHeroBadges />
         <div className="container mx-auto px-6 relative z-10 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -406,6 +931,7 @@ export default function LandingPage() {
                 <div className="relative">
                     <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent rounded-2xl transform rotate-3"></div>
                     <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800 relative z-10">
+                        <ScheduleMiniPreview />
                         <h3 className="text-xl font-bold mb-4">Our Values</h3>
                         <ul className="space-y-4">
                             <li className="flex items-start">
@@ -437,8 +963,23 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-primary/10">
-        <div className="container mx-auto px-6 text-center">
+      <section className="relative overflow-hidden py-20 bg-primary/10">
+        <CTA3DBackground />
+        <div className="pointer-events-none absolute inset-0" aria-hidden>
+          <div className="absolute -top-24 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />
+          <div className="absolute -bottom-28 left-1/3 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
+          <div
+            className="absolute inset-0 opacity-[0.07]"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.9) 1px, transparent 0)",
+              backgroundSize: "26px 26px",
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/5 to-black/20" />
+        </div>
+
+        <div className="container mx-auto px-6 text-center relative z-10">
           <h2 className="text-4xl font-bold mb-6">Ready to transform your scheduling?</h2>
           <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
             Join thousands of businesses saving time and money with SmartCrew Scheduler.
