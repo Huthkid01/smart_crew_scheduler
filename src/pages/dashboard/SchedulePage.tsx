@@ -203,8 +203,7 @@ export default function SchedulePage() {
         };
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase.from('shifts') as any)
-            .insert([newShift]);
+        const { error } = await (supabase.from('shifts') as any).insert([newShift]);
 
         if (error) throw error;
 
@@ -266,6 +265,36 @@ export default function SchedulePage() {
       setEvents(formattedEvents);
     } catch (error) {
       console.error("Error fetching shifts:", error);
+    }
+  }
+
+  async function notifyEmployeesAboutShifts(
+    action: "created" | "updated" | "cancelled",
+    shifts: Array<{ employee_id: string; shift_date: string; start_time: string; end_time: string; change_summary?: string; cancel_reason?: string }>
+  ) {
+    try {
+      const { data: sessionData } = await getSessionSafe();
+      const accessToken = sessionData.session?.access_token ?? null;
+      if (!accessToken) return;
+
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-shift`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          action,
+          shifts,
+        }),
+      });
+
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        console.error("notify-shift failed:", body);
+      }
+    } catch (err) {
+      console.error("notify-shift error:", err);
     }
   }
 
@@ -593,12 +622,28 @@ export default function SchedulePage() {
             const orgId = (profile as Profile).org_id;
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { error } = await (supabase.from('shifts') as any)
+            const { data: publishedRows, error } = await (supabase.from('shifts') as any)
                 .update({ status: 'published' })
                 .eq('org_id', orgId)
-                .eq('status', 'draft');
+                .eq('status', 'draft')
+                .select('employee_id,date,start_time,end_time');
 
             if (error) throw error;
+
+            const rows = (publishedRows as unknown as Array<{ employee_id?: string | null; date?: string | null; start_time?: string | null; end_time?: string | null }> | null) || [];
+            const payload = rows
+              .filter((r) => typeof r.employee_id === "string" && r.employee_id)
+              .map((r) => ({
+                employee_id: r.employee_id as string,
+                shift_date: r.date || "",
+                start_time: r.start_time || "",
+                end_time: r.end_time || "",
+              }))
+              .filter((r) => r.shift_date && r.start_time && r.end_time);
+
+            if (payload.length > 0) {
+              void notifyEmployeesAboutShifts("created", payload);
+            }
             
             toast.success("All draft shifts have been published!");
             fetchShifts();
@@ -624,6 +669,19 @@ export default function SchedulePage() {
     if (!confirm("Are you sure you want to delete this shift?")) return;
 
     try {
+        const cancelledPayload =
+          selectedShift.employeeId
+            ? [
+                {
+                  employee_id: selectedShift.employeeId,
+                  shift_date: format(selectedShift.start, "yyyy-MM-dd"),
+                  start_time: format(selectedShift.start, "HH:mm"),
+                  end_time: format(selectedShift.end, "HH:mm"),
+                  cancel_reason: "This shift was removed by an admin.",
+                },
+              ]
+            : [];
+
         const { error } = await supabase
             .from('shifts')
             .delete()
@@ -632,6 +690,9 @@ export default function SchedulePage() {
         if (error) throw error;
 
         toast.success("Shift deleted successfully");
+        if (cancelledPayload.length > 0) {
+          void notifyEmployeesAboutShifts("cancelled", cancelledPayload);
+        }
         setIsEditShiftOpen(false);
         fetchShifts();
     } catch (error) {
@@ -647,6 +708,11 @@ export default function SchedulePage() {
     const formData = new FormData(e.target as HTMLFormElement);
     
     try {
+        const prevEmployeeId = selectedShift.employeeId;
+        const prevDate = format(selectedShift.start, "yyyy-MM-dd");
+        const prevStart = format(selectedShift.start, "HH:mm");
+        const prevEnd = format(selectedShift.end, "HH:mm");
+
         const updates = {
             employee_id: formData.get("employee") as string,
             date: formData.get("date") as string,
@@ -662,6 +728,25 @@ export default function SchedulePage() {
         if (error) throw error;
 
         toast.success("Shift updated successfully");
+        const nextEmployeeId = updates.employee_id || prevEmployeeId;
+        if (nextEmployeeId) {
+          const changeParts: string[] = [];
+          if (updates.date && updates.date !== prevDate) changeParts.push(`Date: ${prevDate} → ${updates.date}`);
+          if (updates.start_time && updates.start_time !== prevStart) changeParts.push(`Start: ${prevStart} → ${updates.start_time}`);
+          if (updates.end_time && updates.end_time !== prevEnd) changeParts.push(`End: ${prevEnd} → ${updates.end_time}`);
+          if (prevEmployeeId && updates.employee_id && updates.employee_id !== prevEmployeeId) changeParts.push("Employee assignment changed");
+          const change_summary = changeParts.length ? changeParts.join(" • ") : "Schedule details were updated.";
+
+          void notifyEmployeesAboutShifts("updated", [
+            {
+              employee_id: nextEmployeeId,
+              shift_date: updates.date || prevDate,
+              start_time: updates.start_time || prevStart,
+              end_time: updates.end_time || prevEnd,
+              change_summary,
+            },
+          ]);
+        }
         setIsEditShiftOpen(false);
         fetchShifts();
     } catch (error) {

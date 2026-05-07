@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shift updated</title>
+  </head>
+  <body style="margin:0;background:#0b0b0b;color:#ffffff;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;">
+    <div style="max-width:640px;margin:0 auto;padding:32px 18px;">
+      <div style="background:#0f0f0f;border:1px solid rgba(255,255,255,0.10);border-radius:16px;overflow:hidden;">
+        <div style="padding:22px 22px 8px;">
+          <div style="display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(59,130,246,0.16);color:#93c5fd;font-weight:700;font-size:12px;">
+            Schedule update
+          </div>
+          <h1 style="margin:14px 0 8px;font-size:22px;line-height:1.25;">
+            Your shift has been updated
+          </h1>
+          <p style="margin:0 0 12px;color:rgba(255,255,255,0.72);font-size:15px;line-height:1.6;">
+            Hi {{employee_name}}, an admin updated your shift. Please review the latest details.
+          </p>
+        </div>
+
+        <div style="padding:0 22px 18px;">
+          <div style="border:1px solid rgba(255,255,255,0.10);border-radius:12px;padding:14px;background:rgba(255,255,255,0.03);">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+              <div style="min-width:200px;">
+                <div style="color:rgba(255,255,255,0.55);font-size:12px;">Date</div>
+                <div style="font-size:14px;font-weight:700;">{{shift_date}}</div>
+              </div>
+              <div style="min-width:200px;">
+                <div style="color:rgba(255,255,255,0.55);font-size:12px;">Time</div>
+                <div style="font-size:14px;font-weight:700;">{{start_time}} – {{end_time}}</div>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.08);padding-top:12px;">
+              <div style="color:rgba(255,255,255,0.55);font-size:12px;">What changed</div>
+              <div style="font-size:14px;color:rgba(255,255,255,0.85);line-height:1.5;">
+                {{change_summary}}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:0 22px 22px;">
+          <a
+            href="{{schedule_url}}"
+            style="display:inline-block;background:#22c55e;color:#0b0b0b;text-decoration:none;font-weight:800;padding:12px 18px;border-radius:12px;font-size:15px;"
+            target="_blank"
+            rel="noreferrer"
+          >
+            View updated schedule
+          </a>
+          <div style="height:14px;"></div>
+          <div style="color:rgba(255,255,255,0.55);font-size:12px;line-height:1.5;">
+            Link: <span style="word-break:break-all;color:rgba(255,255,255,0.75);">{{schedule_url}}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:14px 6px 0;color:rgba(255,255,255,0.45);font-size:12px;line-height:1.5;text-align:center;">
+        {{app_name}} • This is an automated message.
+      </div>
+    </div>
+  </body>
+</html>

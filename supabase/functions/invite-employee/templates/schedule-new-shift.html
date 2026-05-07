@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>New shift assigned</title>
+  </head>
+  <body style="margin:0;background:#0b0b0b;color:#ffffff;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;">
+    <div style="max-width:640px;margin:0 auto;padding:32px 18px;">
+      <div style="background:#0f0f0f;border:1px solid rgba(255,255,255,0.10);border-radius:16px;overflow:hidden;">
+        <div style="padding:22px 22px 8px;">
+          <div style="display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(34,197,94,0.14);color:#22c55e;font-weight:700;font-size:12px;">
+            New shift
+          </div>
+          <h1 style="margin:14px 0 8px;font-size:22px;line-height:1.25;">
+            You’ve been scheduled for a shift
+          </h1>
+          <p style="margin:0 0 12px;color:rgba(255,255,255,0.72);font-size:15px;line-height:1.6;">
+            Hi {{employee_name}}, a new shift has been assigned to you. Details are below.
+          </p>
+        </div>
+
+        <div style="padding:0 22px 18px;">
+          <div style="border:1px solid rgba(255,255,255,0.10);border-radius:12px;padding:14px;background:rgba(255,255,255,0.03);">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+              <div style="min-width:200px;">
+                <div style="color:rgba(255,255,255,0.55);font-size:12px;">Date</div>
+                <div style="font-size:14px;font-weight:700;">{{shift_date}}</div>
+              </div>
+              <div style="min-width:200px;">
+                <div style="color:rgba(255,255,255,0.55);font-size:12px;">Time</div>
+                <div style="font-size:14px;font-weight:700;">{{start_time}} – {{end_time}}</div>
+              </div>
+              <div style="min-width:200px;">
+                <div style="color:rgba(255,255,255,0.55);font-size:12px;">Role</div>
+                <div style="font-size:14px;font-weight:700;">{{position}}</div>
+              </div>
+              <div style="min-width:200px;">
+                <div style="color:rgba(255,255,255,0.55);font-size:12px;">Location</div>
+                <div style="font-size:14px;font-weight:700;">{{location}}</div>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div style="color:rgba(255,255,255,0.55);font-size:12px;">Notes</div>
+              <div style="font-size:14px;color:rgba(255,255,255,0.85);line-height:1.5;">
+                {{notes}}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:0 22px 22px;">
+          <a
+            href="{{schedule_url}}"
+            style="display:inline-block;background:#22c55e;color:#0b0b0b;text-decoration:none;font-weight:800;padding:12px 18px;border-radius:12px;font-size:15px;"
+            target="_blank"
+            rel="noreferrer"
+          >
+            View schedule
+          </a>
+          <div style="height:14px;"></div>
+          <div style="color:rgba(255,255,255,0.55);font-size:12px;line-height:1.5;">
+            If the button doesn’t work, copy and paste this link into your browser:
+            <div style="word-break:break-all;margin-top:6px;color:rgba(255,255,255,0.75);">
+              {{schedule_url}}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:14px 6px 0;color:rgba(255,255,255,0.45);font-size:12px;line-height:1.5;text-align:center;">
+        {{app_name}} • This is an automated message.
+      </div>
+    </div>
+  </body>
+</html>
