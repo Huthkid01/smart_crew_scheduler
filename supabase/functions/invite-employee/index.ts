@@ -11,8 +11,53 @@ type GenerateInviteLinkResult = {
   properties?: { action_link?: string }
 }
 
-async function renderTemplate(templatePath: URL, variables: Record<string, string>) {
-  const raw = await Deno.readTextFile(templatePath)
+const INVITE_EMPLOYEE_TEMPLATE = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{app_name}} Invitation</title>
+  </head>
+  <body style="margin:0;background:#0b0b0b;color:#ffffff;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;">
+    <div style="max-width:640px;margin:0 auto;padding:32px 18px;">
+      <div style="background:#0f0f0f;border:1px solid rgba(255,255,255,0.10);border-radius:16px;overflow:hidden;">
+        <div style="padding:22px 22px 8px;">
+          <div style="display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(34,197,94,0.14);color:#22c55e;font-weight:700;font-size:12px;letter-spacing:0.2px;">
+            You’re invited
+          </div>
+          <h1 style="margin:14px 0 8px;font-size:24px;line-height:1.25;">
+            Join {{app_name}}
+          </h1>
+          <p style="margin:0 0 12px;color:rgba(255,255,255,0.72);font-size:15px;line-height:1.6;">
+            Hi {{employee_name}}, you’ve been invited to access your employee dashboard. Click the button below to accept the invitation and set your password.
+          </p>
+        </div>
+        <div style="padding:0 22px 22px;">
+          <a
+            href="{{invite_url}}"
+            style="display:inline-block;background:#22c55e;color:#0b0b0b;text-decoration:none;font-weight:800;padding:12px 18px;border-radius:12px;font-size:15px;"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Accept Invitation
+          </a>
+          <div style="height:14px;"></div>
+          <div style="color:rgba(255,255,255,0.55);font-size:12px;line-height:1.5;">
+            If the button doesn’t work, copy and paste this link into your browser:
+            <div style="word-break:break-all;margin-top:6px;color:rgba(255,255,255,0.75);">
+              {{invite_url}}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:14px 6px 0;color:rgba(255,255,255,0.45);font-size:12px;line-height:1.5;text-align:center;">
+        If you didn’t expect this invite, you can safely ignore this email.
+      </div>
+    </div>
+  </body>
+</html>`
+
+function renderTemplate(raw: string, variables: Record<string, string>) {
   return raw.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match: string, key: string) => {
     const value = variables[String(key)]
     return typeof value === 'string' ? value : match
@@ -165,18 +210,17 @@ serve(async (req: Request) => {
 
     // 3. Update employee record with the new user_id
     if (authData.user) {
-        const { error: updateError } = await supabaseAdmin
-            .from('employees')
-            .update({ 
-                user_id: authData.user.id,
-                invite_status: 'pending'
-            })
-            .eq('id', employee_id)
+      const { error: updateError } = await supabaseAdmin
+        .from('employees')
+        .update({
+          user_id: authData.user.id,
+          invite_status: 'pending',
+        })
+        .eq('id', employee_id)
 
-        if (updateError) {
-            console.error("Database Update Error:", updateError);
-            throw updateError;
-        }
+      if (updateError) {
+        console.error("Database Update Error:", updateError);
+      }
     }
 
     if (shouldUseBrevo) {
@@ -184,7 +228,7 @@ serve(async (req: Request) => {
         throw new Error('Invite link was not generated')
       }
 
-      const html = await renderTemplate(new URL("./templates/invite-employee.html", import.meta.url), {
+      const html = renderTemplate(INVITE_EMPLOYEE_TEMPLATE, {
         app_name: "SmartCrew Scheduler",
         invite_url: inviteLink,
         employee_name: displayName,
