@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Clock, MapPin, Briefcase, User } from "lucide-react";
+import { Calendar, Clock, MapPin, Briefcase, User, CalendarDays } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { format, parse, isToday, isTomorrow, startOfWeek, endOfWeek, differenceInMinutes } from "date-fns";
@@ -8,6 +8,17 @@ import { useNavigate } from "react-router-dom";
 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface MyShift {
   id: string;
@@ -16,6 +27,17 @@ interface MyShift {
   end_time: string;
   break_minutes?: number;
   status: 'published' | 'draft' | 'completed';
+}
+
+type TimeOffStatus = "pending" | "approved" | "rejected";
+
+interface TimeOffRequest {
+  id: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  status: TimeOffStatus;
+  created_at: string;
 }
 
 export default function EmployeeDashboard() {
@@ -27,6 +49,12 @@ export default function EmployeeDashboard() {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [currentEntryId, setCurrentEntryId] = useState<string | null>(null);
+  const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
+  const [isTimeOffOpen, setIsTimeOffOpen] = useState(false);
+  const [timeOffStart, setTimeOffStart] = useState("");
+  const [timeOffEnd, setTimeOffEnd] = useState("");
+  const [timeOffReason, setTimeOffReason] = useState("");
+  const [isSubmittingTimeOff, setIsSubmittingTimeOff] = useState(false);
 
   const loadPublishedShiftsAndWeekly = useCallback(async (empId: string) => {
     const todayStr = format(new Date(), "yyyy-MM-dd");
@@ -85,6 +113,21 @@ export default function EmployeeDashboard() {
     }
   }, []);
 
+  const loadTimeOffRequests = useCallback(async (empId: string) => {
+    const { data, error } = await supabase
+      .from("time_off_requests")
+      .select("id, start_date, end_date, reason, status, created_at")
+      .eq("employee_id", empId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error("Error fetching time off requests:", error);
+      return;
+    }
+    setTimeOffRequests((data as TimeOffRequest[]) || []);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const channelRef: { current: ReturnType<typeof supabase.channel> | null } = { current: null };
@@ -115,6 +158,7 @@ export default function EmployeeDashboard() {
 
         await loadPublishedShiftsAndWeekly(employee.id);
         await syncClockState(employee.id);
+        await loadTimeOffRequests(employee.id);
         if (cancelled) return;
 
         const rt = supabase
@@ -143,6 +187,18 @@ export default function EmployeeDashboard() {
               syncClockState(employee.id);
             }
           )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "time_off_requests",
+              filter: `employee_id=eq.${employee.id}`,
+            },
+            () => {
+              loadTimeOffRequests(employee.id);
+            }
+          )
           .subscribe();
 
         if (cancelled) {
@@ -164,7 +220,45 @@ export default function EmployeeDashboard() {
         channelRef.current = null;
       }
     };
-  }, [loadPublishedShiftsAndWeekly, syncClockState]);
+  }, [loadPublishedShiftsAndWeekly, loadTimeOffRequests, syncClockState]);
+
+  const handleSubmitTimeOff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employeeId) return;
+    if (!timeOffStart || !timeOffEnd || !timeOffReason.trim()) {
+      toast.error("Please fill in all fields.");
+      return;
+    }
+    if (new Date(timeOffEnd) < new Date(timeOffStart)) {
+      toast.error("End date must be on or after the start date.");
+      return;
+    }
+
+    setIsSubmittingTimeOff(true);
+    try {
+      const { error } = await supabase.from("time_off_requests").insert({
+        employee_id: employeeId,
+        start_date: timeOffStart,
+        end_date: timeOffEnd,
+        reason: timeOffReason.trim(),
+        status: "pending",
+      });
+
+      if (error) throw error;
+
+      toast.success("Time off request submitted.");
+      setIsTimeOffOpen(false);
+      setTimeOffStart("");
+      setTimeOffEnd("");
+      setTimeOffReason("");
+      await loadTimeOffRequests(employeeId);
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not submit the request. Please try again.");
+    } finally {
+      setIsSubmittingTimeOff(false);
+    }
+  };
 
   const handleClockInOut = async () => {
       if (!employeeId) return;
@@ -214,6 +308,12 @@ export default function EmployeeDashboard() {
   }
 
   const nextShift = shifts[0];
+  const statusChip = (status: TimeOffStatus) => {
+    const base = "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold";
+    if (status === "approved") return `${base} bg-green-500/15 text-green-400`;
+    if (status === "rejected") return `${base} bg-red-500/15 text-red-400`;
+    return `${base} bg-yellow-500/15 text-yellow-300`;
+  };
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -284,6 +384,145 @@ export default function EmployeeDashboard() {
             </CardContent>
           </Card>
       </div>
+
+      <Card className="bg-zinc-900 border-zinc-800 text-white">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-white flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-primary" /> Time Off
+          </CardTitle>
+          <Dialog
+            open={isTimeOffOpen}
+            onOpenChange={(open) => {
+              setIsTimeOffOpen(open);
+              if (!open) {
+                setTimeOffStart("");
+                setTimeOffEnd("");
+                setTimeOffReason("");
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button className="bg-primary hover:bg-primary/90 text-black font-bold w-full sm:w-auto">
+                Request Time Off
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
+              <DialogHeader>
+                <DialogTitle>Request Time Off</DialogTitle>
+                <DialogDescription className="text-zinc-400">
+                  Submit your request and we’ll notify you once it’s approved or declined.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmitTimeOff}>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="timeoff-start-date" className="text-right">Start Date</Label>
+                    <Input
+                      id="timeoff-start-date"
+                      type="date"
+                      className="col-span-3 bg-zinc-950 border-zinc-800"
+                      required
+                      value={timeOffStart}
+                      onChange={(e) => setTimeOffStart(e.target.value)}
+                      onKeyDown={(e) => {
+                        const allowed = new Set([
+                          "Tab",
+                          "Shift",
+                          "Escape",
+                          "ArrowLeft",
+                          "ArrowRight",
+                          "ArrowUp",
+                          "ArrowDown",
+                          "Home",
+                          "End",
+                        ]);
+                        if (!allowed.has(e.key)) e.preventDefault();
+                      }}
+                      onBeforeInput={(e) => e.preventDefault()}
+                      onPaste={(e) => e.preventDefault()}
+                      onClick={(e) =>
+                        (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()
+                      }
+                      inputMode="none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="timeoff-end-date" className="text-right">End Date</Label>
+                    <Input
+                      id="timeoff-end-date"
+                      type="date"
+                      className="col-span-3 bg-zinc-950 border-zinc-800"
+                      required
+                      value={timeOffEnd}
+                      onChange={(e) => setTimeOffEnd(e.target.value)}
+                      onKeyDown={(e) => {
+                        const allowed = new Set([
+                          "Tab",
+                          "Shift",
+                          "Escape",
+                          "ArrowLeft",
+                          "ArrowRight",
+                          "ArrowUp",
+                          "ArrowDown",
+                          "Home",
+                          "End",
+                        ]);
+                        if (!allowed.has(e.key)) e.preventDefault();
+                      }}
+                      onBeforeInput={(e) => e.preventDefault()}
+                      onPaste={(e) => e.preventDefault()}
+                      onClick={(e) =>
+                        (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()
+                      }
+                      inputMode="none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="timeoff-reason" className="text-right">Reason</Label>
+                    <Input
+                      id="timeoff-reason"
+                      placeholder="Vacation, appointment, etc."
+                      className="col-span-3 bg-zinc-950 border-zinc-800"
+                      required
+                      value={timeOffReason}
+                      onChange={(e) => setTimeOffReason(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="submit"
+                    className="bg-primary text-black hover:bg-primary/90"
+                    disabled={isSubmittingTimeOff}
+                  >
+                    {isSubmittingTimeOff ? <SmartCrewLogoMark size="xs" /> : "Submit Request"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {timeOffRequests.length === 0 ? (
+            <div className="text-sm text-zinc-400">No time off requests yet.</div>
+          ) : (
+            timeOffRequests.map((req) => (
+              <div
+                key={req.id}
+                className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <div className="text-sm font-medium text-white">
+                    {format(new Date(req.start_date), "MMM d, yyyy")} → {format(new Date(req.end_date), "MMM d, yyyy")}
+                  </div>
+                  <div className="text-xs text-zinc-400">{req.reason}</div>
+                </div>
+                <div className={statusChip(req.status)}>{req.status}</div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
       
       {/* Next Shift Highlight Card */}
       <h2 className="text-xl font-semibold text-white mt-4">Next Up</h2>

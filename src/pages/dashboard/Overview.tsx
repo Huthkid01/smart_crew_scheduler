@@ -5,6 +5,8 @@ import { Users, Calendar, DollarSign, Clock, ChevronDown } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { startOfWeek, endOfWeek, format, parse, differenceInMinutes } from "date-fns";
+import { useOrgSettings } from "@/contexts/orgSettings";
+import { formatCurrency } from "@/lib/utils";
 
 interface ShiftWithCost {
   start_time: string;
@@ -28,6 +30,7 @@ interface UpcomingShift {
 
 export default function Overview() {
   const navigate = useNavigate();
+  const { currencyCode } = useOrgSettings();
   const [stats, setStats] = useState({
     totalEmployees: 0,
     shiftsThisWeek: 0,
@@ -233,7 +236,7 @@ export default function Overview() {
             <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.laborCost.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{formatCurrency(stats.laborCost, currencyCode)}</div>
             <p className="text-xs text-zinc-400">For current week</p>
           </CardContent>
         </Card>

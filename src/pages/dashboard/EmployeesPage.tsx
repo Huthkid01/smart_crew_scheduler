@@ -24,6 +24,8 @@ import {
 import { getSessionSafe, supabase } from "@/supabase/client";
 import type { Database } from "@/supabase/types";
 import { toast } from "sonner";
+import { useOrgSettings } from "@/contexts/orgSettings";
+import { formatCurrency } from "@/lib/utils";
 
 interface Profile {
   org_id: string;
@@ -43,6 +45,7 @@ type EmployeeInsert = Database['public']['Tables']['employees']['Insert'];
 // type EmployeeUpdate = Database['public']['Tables']['employees']['Update'];
 
 export default function EmployeesPage() {
+  const { currencyCode } = useOrgSettings();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -520,7 +523,7 @@ export default function EmployeesPage() {
                         <span className="text-zinc-500 text-xs">No skills</span>
                       )}
                     </td>
-                    <td className="p-4 align-middle text-zinc-300">${employee.hourly_rate.toFixed(2)}/hr</td>
+                    <td className="p-4 align-middle text-zinc-300">{formatCurrency(employee.hourly_rate, currencyCode)}/hr</td>
                     <td className="p-4 align-middle">
                     <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${

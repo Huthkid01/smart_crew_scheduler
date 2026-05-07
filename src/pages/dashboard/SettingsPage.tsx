@@ -7,6 +7,8 @@ import { Building } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCurrency } from "@/lib/utils";
 // import type { Database } from "@/supabase/types";
 
 interface Profile {
@@ -20,9 +22,11 @@ export default function SettingsPage() {
     id: "",
     name: "",
     subscription_tier: "",
+    currency_code: "USD",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [canEditOrg, setCanEditOrg] = useState(false);
 
   useEffect(() => {
     fetchOrg();
@@ -36,12 +40,14 @@ export default function SettingsPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('org_id')
+        .select('org_id, role')
         .eq('id', user.id)
         .single();
 
       if (profile) {
         const orgId = (profile as Profile).org_id;
+        const role = (profile as unknown as { role?: string | null } | null)?.role ?? null;
+        setCanEditOrg(role === "admin" || role === "manager");
         
         const { data: orgData, error } = await supabase
             .from('organizations')
@@ -57,7 +63,8 @@ export default function SettingsPage() {
             setOrg({
                 id: d.id,
                 name: d.name,
-                subscription_tier: d.subscription_tier || "free"
+                subscription_tier: d.subscription_tier || "free",
+                currency_code: d.currency_code || "USD",
             });
         }
       }
@@ -70,16 +77,21 @@ export default function SettingsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEditOrg) {
+      toast.error("Only admins or managers can update organization settings.");
+      return;
+    }
     setIsSaving(true);
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error } = await (supabase.from('organizations') as any)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .update({ name: org.name } as any)
+            .update({ name: org.name, currency_code: org.currency_code } as any)
             .eq('id', org.id);
 
         if (error) throw error;
         toast.success("Organization settings updated successfully!");
+        window.dispatchEvent(new Event("smartcrew:orgSettingsUpdated"));
     } catch (error) {
         console.error("Error updating organization:", error);
         toast.error("Failed to update organization.");
@@ -128,7 +140,33 @@ export default function SettingsPage() {
                             value={org.name}
                             onChange={(e) => setOrg({...org, name: e.target.value})}
                             className="bg-zinc-950 border-zinc-800" 
+                            disabled={!canEditOrg}
                         />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Currency</Label>
+                        <Select
+                          value={org.currency_code}
+                          onValueChange={(value) => setOrg({ ...org, currency_code: value })}
+                          disabled={!canEditOrg}
+                        >
+                          <SelectTrigger className="bg-zinc-950 border-zinc-800 text-white">
+                            <SelectValue placeholder="Select currency" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                            <SelectItem value="USD">USD — US Dollar</SelectItem>
+                            <SelectItem value="EUR">EUR — Euro</SelectItem>
+                            <SelectItem value="GBP">GBP — British Pound</SelectItem>
+                            <SelectItem value="NGN">NGN — Nigerian Naira</SelectItem>
+                            <SelectItem value="CAD">CAD — Canadian Dollar</SelectItem>
+                            <SelectItem value="AUD">AUD — Australian Dollar</SelectItem>
+                            <SelectItem value="INR">INR — Indian Rupee</SelectItem>
+                            <SelectItem value="ZAR">ZAR — South African Rand</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="text-xs text-zinc-400">
+                          Preview: {formatCurrency(1234.56, org.currency_code)}
+                        </div>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="id">Organization ID</Label>
@@ -156,7 +194,7 @@ export default function SettingsPage() {
                 </div>
             </CardContent>
              <div className="p-6 pt-0 flex justify-end">
-                <Button type="submit" className="bg-primary text-black hover:bg-primary/90 font-bold" disabled={isSaving}>
+                <Button type="submit" className="bg-primary text-black hover:bg-primary/90 font-bold" disabled={isSaving || !canEditOrg}>
                     {isSaving ? <SmartCrewLogoMark size="xs" className="mr-2" /> : null}
                     Save Changes
                 </Button>

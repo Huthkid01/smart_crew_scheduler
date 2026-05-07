@@ -41,6 +41,7 @@ const files = [
   "20260408_handle_new_user_invite_metadata.sql",
   "20260409120000_enable_realtime_shifts_time_entries.sql",
   "20260409140000_time_off_requests.sql",
+  "20260507170000_add_org_currency_code.sql",
 ];
 
 const client = new pg.Client({

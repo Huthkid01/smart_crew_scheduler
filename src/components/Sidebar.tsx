@@ -5,9 +5,9 @@ import {
   LayoutDashboard,
   Calendar,
   Users,
-  Clock,
+  CalendarDays,
   BarChart3,
-  Settings,
+  User,
   LogOut,
   Zap,
   Building,
@@ -33,18 +33,20 @@ const navigation: NavItem[] = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, end: true },
   { name: 'Schedule', href: '/dashboard/schedule', icon: Calendar, roles: ['admin', 'manager'] },
   { name: 'Employees', href: '/dashboard/employees', icon: Users, roles: ['admin', 'manager'] },
-  { name: 'Availability', href: '/dashboard/availability', icon: Clock, roles: ['admin', 'manager'] },
+  { name: 'Time Off Requests', href: '/dashboard/availability', icon: CalendarDays, roles: ['admin', 'manager'] },
   { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, roles: ['admin', 'manager'] },
 ];
 
 export function Sidebar({
   isOpen,
   desktopOpen = true,
+  orgName,
   onClose,
   onDesktopToggle,
 }: {
   isOpen?: boolean;
   desktopOpen?: boolean;
+  orgName?: string;
   onClose?: () => void;
   onDesktopToggle?: () => void;
 }) {
@@ -80,13 +82,12 @@ export function Sidebar({
     navigate('/login');
   };
 
+  const dashboardHomePath = userRole === "employee" ? "/dashboard/home" : "/dashboard/overview";
+
   const filteredNavigation = navigation
     .map(item => {
       if (item.name === 'Overview') {
-        if (userRole === 'employee') {
-          return { ...item, name: 'Home', href: '/dashboard/home', end: false };
-        }
-        return { ...item, href: '/dashboard/overview', end: false };
+        return { ...item, name: 'Home', href: dashboardHomePath, end: false };
       }
       return item;
     })
@@ -111,15 +112,30 @@ export function Sidebar({
         desktopOpen ? "w-64" : "w-16",
         isOpen ? "translate-x-0" : "-translate-x-full",
         "md:translate-x-0"
-      )}>
+      )}
+      >
         <div className={desktopOpen ? "p-6" : "p-4"}>
           <div className="flex items-center gap-2 justify-between">
-            <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-              <Zap className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <span className={desktopOpen ? "text-xl font-bold text-white" : "hidden"}>SmartCrew</span>
-            </div>
+            <NavLink
+              to="/"
+              onClick={() => onClose?.()}
+              className={cn("flex items-center gap-2", !desktopOpen && "relative group")}
+              aria-label="Go to main home"
+              data-tour="nav-dashboard-home"
+            >
+              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                <Zap className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div className={desktopOpen ? "flex flex-col leading-tight" : "hidden"}>
+                <span className="text-xl font-bold text-white">SmartCrew</span>
+                {orgName && <span className="text-xs text-zinc-400">{orgName}</span>}
+              </div>
+              {!desktopOpen && (
+                <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-zinc-950 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                  Main Home
+                </span>
+              )}
+            </NavLink>
             <Button
               type="button"
               variant="ghost"
@@ -141,69 +157,89 @@ export function Sidebar({
               end={item.end}
               onClick={() => onClose?.()} // Close sidebar on mobile when link is clicked
               title={!desktopOpen ? item.name : undefined}
+              data-tour={`nav-${item.href.split("/").filter(Boolean).pop() ?? "overview"}`}
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
                   isActive
                     ? "bg-primary/10 text-primary"
                     : "text-zinc-400 hover:bg-zinc-900 hover:text-white",
-                  !desktopOpen && "justify-center px-0"
+                  !desktopOpen && "justify-center px-0 relative group"
                 )
               }
             >
               <item.icon className="h-5 w-5" />
               <span className={desktopOpen ? "inline" : "hidden"}>{item.name}</span>
+              {!desktopOpen && (
+                <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-zinc-950 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                  {item.name}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
 
         <div className={desktopOpen ? "p-4 border-t border-zinc-800 space-y-1" : "p-2 border-t border-zinc-800 space-y-1"}>
-          {userRole === 'admin' && (
-               <NavLink 
-               to="/dashboard/settings"
-               onClick={() => onClose?.()}
-               title={!desktopOpen ? "Organization" : undefined}
-               className={({ isActive }) =>
-                 cn(
-                   "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                   isActive
-                     ? "bg-primary/10 text-primary"
-                     : "text-zinc-400 hover:bg-zinc-900 hover:text-white",
-                    !desktopOpen && "justify-center px-0"
-                 )
-               }
-             >
-               <Building className="h-5 w-5" />
-               <span className={desktopOpen ? "inline" : "hidden"}>Organization</span>
-             </NavLink>
-          )}
+          <NavLink
+            to="/dashboard/settings"
+            onClick={() => onClose?.()}
+            title={!desktopOpen ? "Organization Settings" : undefined}
+            data-tour="nav-organization-settings"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                isActive ? "bg-primary/10 text-primary" : "text-zinc-400 hover:bg-zinc-900 hover:text-white",
+                !desktopOpen && "justify-center px-0 relative group",
+              )
+            }
+          >
+            <Building className="h-5 w-5" />
+            <span className={desktopOpen ? "inline" : "hidden"}>Organization Settings</span>
+            {!desktopOpen && (
+              <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-zinc-950 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                Organization Settings
+              </span>
+            )}
+          </NavLink>
           <NavLink 
             to="/dashboard/profile"
             onClick={() => onClose?.()}
             title={!desktopOpen ? "Profile" : undefined}
+            data-tour="nav-profile"
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
                 isActive
                   ? "bg-primary/10 text-primary"
                   : "text-zinc-400 hover:bg-zinc-900 hover:text-white",
-                !desktopOpen && "justify-center px-0"
+                !desktopOpen && "justify-center px-0 relative group"
               )
             }
           >
-            <Settings className="h-5 w-5" />
+            <User className="h-5 w-5" />
             <span className={desktopOpen ? "inline" : "hidden"}>Profile</span>
+            {!desktopOpen && (
+              <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-zinc-950 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                Profile
+              </span>
+            )}
           </NavLink>
           <button 
             onClick={handleSignOut}
             title={!desktopOpen ? "Sign Out" : undefined}
+            data-tour="nav-signout"
             className={cn(
               "flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-400 hover:text-white w-full rounded-md hover:bg-zinc-900 transition-colors",
-              !desktopOpen && "justify-center px-0"
+              !desktopOpen && "justify-center px-0 relative group"
             )}
           >
             <LogOut className="h-5 w-5" />
             <span className={desktopOpen ? "inline" : "hidden"}>Sign Out</span>
+            {!desktopOpen && (
+              <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-zinc-950 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                Sign Out
+              </span>
+            )}
           </button>
         </div>
       </div>

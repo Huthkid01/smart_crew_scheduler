@@ -1,426 +1,223 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Calendar as CalendarIcon, Clock, Save } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { toast } from "sonner";
 
-const DAYS_OF_WEEK = [
-  { name: "Sunday", value: 0 },
-  { name: "Monday", value: 1 },
-  { name: "Tuesday", value: 2 },
-  { name: "Wednesday", value: 3 },
-  { name: "Thursday", value: 4 },
-  { name: "Friday", value: 5 },
-  { name: "Saturday", value: 6 },
-];
+type TimeOffStatus = "pending" | "approved" | "rejected";
+type TimeOffFilter = TimeOffStatus | "all";
 
-// Re-order to start with Monday for display, but keep values consistent
-const DISPLAY_DAYS = [
-  DAYS_OF_WEEK[1], // Mon
-  DAYS_OF_WEEK[2], // Tue
-  DAYS_OF_WEEK[3], // Wed
-  DAYS_OF_WEEK[4], // Thu
-  DAYS_OF_WEEK[5], // Fri
-  DAYS_OF_WEEK[6], // Sat
-  DAYS_OF_WEEK[0], // Sun
-];
-
-interface Availability {
-  id?: string;
-  day_of_week: number;
-  is_available: boolean;
-  start_time: string | null;
-  end_time: string | null;
-}
-
-interface Employee {
+interface TimeOffRequestRow {
   id: string;
-  name: string;
+  employee_id: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  status: TimeOffStatus;
+  created_at: string;
+  employees?: { name?: string | null; position?: string | null } | null;
 }
 
 export default function AvailabilityPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
-  const [availability, setAvailability] = useState<Availability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isTimeOffOpen, setIsTimeOffOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [timeOffStart, setTimeOffStart] = useState("");
-  const [timeOffEnd, setTimeOffEnd] = useState("");
-  const [timeOffReason, setTimeOffReason] = useState("");
-  const [isSubmittingTimeOff, setIsSubmittingTimeOff] = useState(false);
+  const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequestRow[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+  const [updatingRequestId, setUpdatingRequestId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<TimeOffFilter>("pending");
 
   useEffect(() => {
-    fetchUserData();
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || cancelled) return;
 
-  useEffect(() => {
-    if (selectedEmployeeId) {
-      fetchAvailability(selectedEmployeeId);
-    } else {
-        setAvailability([]);
-    }
-  }, [selectedEmployeeId]);
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, org_id')
+          .eq('id', user.id)
+          .single();
 
-  async function fetchUserData() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+        if (!profile || cancelled) return;
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, org_id')
-        .eq('id', user.id)
-        .single();
-
-      if (profile) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const role = (profile as any).role || 'employee';
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const orgId = (profile as any).org_id;
-        setUserRole(role);
-
-        if (role === 'employee') {
-            // If employee, only get own record
-            const { data: emp } = await supabase
-                .from('employees')
-                .select('id, name')
-                .eq('user_id', user.id)
-                .single();
-            
-            if (emp) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const employee = emp as any;
-                setEmployees([employee]);
-                setSelectedEmployeeId(employee.id);
-            }
-        } else {
-            // If admin, get all employees
-            const { data: employeesData } = await supabase
-            .from('employees')
-            .select('id, name')
-            .eq('org_id', orgId)
-            .eq('is_active', true)
-            .order('name');
-
-            const data = (employeesData || []) as unknown as Employee[];
-            setEmployees(data);
-            if (data.length > 0) {
-                setSelectedEmployeeId(data[0].id);
-            }
-        }
+        if (!cancelled) setUserRole(role);
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    })();
 
-  async function fetchAvailability(employeeId: string) {
-    setIsLoading(true);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fetchTimeOffRequests = async (status: TimeOffFilter) => {
+    setIsLoadingRequests(true);
     try {
-        const { data, error } = await supabase
-            .from('availability')
-            .select('*')
-            .eq('employee_id', employeeId);
+      let query = supabase
+        .from("time_off_requests")
+        .select("id, employee_id, start_date, end_date, reason, status, created_at, employees(name, position)")
+        .order("created_at", { ascending: false })
+        .limit(100);
 
-        if (error) throw error;
+      if (status !== "all") {
+        query = query.eq("status", status);
+      }
 
-        // Initialize with defaults if missing
-        const fullAvailability = DISPLAY_DAYS.map(day => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const existing = data?.find((a: any) => a.day_of_week === day.value);
-            return existing || {
-                day_of_week: day.value,
-                is_available: true,
-                start_time: "09:00:00",
-                end_time: "17:00:00"
-            };
-        });
-
-        setAvailability(fullAvailability);
+      const { data, error } = await query;
+      if (error) throw error;
+      setTimeOffRequests((data as TimeOffRequestRow[]) || []);
     } catch (error) {
-        console.error("Error fetching availability:", error);
+      console.error("Error fetching time off requests:", error);
+      toast.error("Could not load time-off requests.");
     } finally {
-        setIsLoading(false);
-    }
-  }
-
-  const handleAvailabilityChange = (dayValue: number, field: keyof Availability, value: boolean | string) => {
-    setAvailability(prev => prev.map(item => {
-        if (item.day_of_week === dayValue) {
-            return { ...item, [field]: value };
-        }
-        return item;
-    }));
-  };
-
-  const handleSaveAvailability = async () => {
-    if (!selectedEmployeeId) return;
-    setIsSaving(true);
-    try {
-        const updates = availability.map(item => ({
-            employee_id: selectedEmployeeId,
-            day_of_week: item.day_of_week,
-            is_available: item.is_available,
-            start_time: item.is_available ? item.start_time : null,
-            end_time: item.is_available ? item.end_time : null,
-        }));
-        
-        const { error } = await supabase
-            .from('availability')
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .upsert(updates as any, { onConflict: 'employee_id,day_of_week' });
-
-        if (error) throw error;
-        toast.success("Availability saved successfully!");
-        
-        // Refresh to get IDs
-        fetchAvailability(selectedEmployeeId);
-
-    } catch (error) {
-        console.error("Error saving availability:", error);
-        toast.error("Failed to save availability.");
-    } finally {
-        setIsSaving(false);
+      setIsLoadingRequests(false);
     }
   };
 
-  const handleSubmitTimeOff = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedEmployeeId) {
-      toast.error("Select an employee first.");
-      return;
-    }
-    if (!timeOffStart || !timeOffEnd || !timeOffReason.trim()) {
-      toast.error("Please fill in all fields.");
-      return;
-    }
-    if (new Date(timeOffEnd) < new Date(timeOffStart)) {
-      toast.error("End date must be on or after the start date.");
-      return;
-    }
+  useEffect(() => {
+    if (!userRole) return;
+    if (userRole === "employee") return;
+    fetchTimeOffRequests(filter);
+  }, [filter, userRole]);
 
-    setIsSubmittingTimeOff(true);
+  const updateRequestStatus = async (requestId: string, status: TimeOffStatus) => {
+    setUpdatingRequestId(requestId);
     try {
-      const { error } = await supabase.from("time_off_requests").insert({
-        employee_id: selectedEmployeeId,
-        start_date: timeOffStart,
-        end_date: timeOffEnd,
-        reason: timeOffReason.trim(),
-        status: "pending",
-      });
+      const { error } = await supabase
+        .from("time_off_requests")
+        .update({ status })
+        .eq("id", requestId);
 
       if (error) throw error;
-
-      toast.success("Time off request submitted.");
-      setIsTimeOffOpen(false);
-      setTimeOffStart("");
-      setTimeOffEnd("");
-      setTimeOffReason("");
-    } catch (err) {
-      console.error(err);
-      toast.error(
-        "Could not save the request. Run the latest Supabase migration for time_off_requests, then try again."
-      );
+      toast.success(status === "approved" ? "Request approved." : "Request declined.");
+      fetchTimeOffRequests(filter);
+    } catch (error) {
+      console.error("Error updating request:", error);
+      toast.error("Could not update the request.");
     } finally {
-      setIsSubmittingTimeOff(false);
+      setUpdatingRequestId(null);
     }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="text-center sm:text-left">
-            <h1 className="text-3xl font-bold tracking-tight text-white">Availability</h1>
-            <p className="text-zinc-400">Manage weekly availability.</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            {userRole !== 'employee' && (
-                <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                    <SelectTrigger className="w-full sm:w-[200px] bg-zinc-900 border-zinc-800 text-white">
-                        <SelectValue placeholder="Select Employee" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                        {employees.map(emp => (
-                            <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            )}
-            <Dialog
-              open={isTimeOffOpen}
-              onOpenChange={(open) => {
-                setIsTimeOffOpen(open);
-                if (!open) {
-                  setTimeOffStart("");
-                  setTimeOffEnd("");
-                  setTimeOffReason("");
-                }
-              }}
-            >
-            <DialogTrigger asChild>
-                <Button variant="outline" className="bg-zinc-800 hover:bg-zinc-700 transition-colors border-zinc-700 text-white hover:text-white w-full sm:w-auto">
-                <CalendarIcon className="mr-2 h-4 w-4" /> Request Time Off
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
-                {/* Time Off Dialog Content (Keep as is for now) */}
-                <DialogHeader>
-                <DialogTitle>Request Time Off</DialogTitle>
-                <DialogDescription className="text-zinc-400">
-                    Requests are saved to the database as <span className="text-zinc-300">pending</span> for admin review (update status in Supabase or a future approvals screen).
-                </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleSubmitTimeOff}>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="start-date" className="text-right">Start Date</Label>
-                            <Input
-                              id="start-date"
-                              type="date"
-                              className="col-span-3 bg-zinc-950 border-zinc-800"
-                              required
-                              value={timeOffStart}
-                              onChange={(e) => setTimeOffStart(e.target.value)}
-                            />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="end-date" className="text-right">End Date</Label>
-                            <Input
-                              id="end-date"
-                              type="date"
-                              className="col-span-3 bg-zinc-950 border-zinc-800"
-                              required
-                              value={timeOffEnd}
-                              onChange={(e) => setTimeOffEnd(e.target.value)}
-                            />
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="reason" className="text-right">Reason</Label>
-                            <Input
-                              id="reason"
-                              placeholder="Vacation, etc."
-                              className="col-span-3 bg-zinc-950 border-zinc-800"
-                              required
-                              value={timeOffReason}
-                              onChange={(e) => setTimeOffReason(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button
-                          type="submit"
-                          className="bg-primary text-black hover:bg-primary/90"
-                          disabled={isSubmittingTimeOff}
-                        >
-                          {isSubmittingTimeOff ? (
-                            <SmartCrewLogoMark size="xs" />
-                          ) : (
-                            "Submit Request"
-                          )}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-            </Dialog>
-        </div>
-      </div>
-
       {isLoading ? (
           <div className="flex items-center justify-center h-64">
               <SmartCrewLogoMark size="sm" />
           </div>
+      ) : userRole === "employee" ? (
+        <Card className="bg-zinc-900 border-zinc-800 text-white">
+          <CardHeader>
+            <CardTitle>Time-off Requests</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-zinc-400">
+            This section is available to admins/managers. Employees can request time off from their dashboard home.
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid gap-6">
-            {DISPLAY_DAYS.map((day) => {
-                const dayData = availability.find(a => a.day_of_week === day.value) || { 
-                    day_of_week: day.value, is_available: true, start_time: "09:00:00", end_time: "17:00:00" 
-                };
-                
-                return (
-                <Card key={day.name} className="bg-zinc-900 border-zinc-800 text-white">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-base font-medium">{day.name}</CardTitle>
-                    <Switch 
-                        checked={dayData.is_available}
-                        onCheckedChange={(checked) => handleAvailabilityChange(day.value, "is_available", checked)}
-                    />
-                    </CardHeader>
-                    <CardContent>
-                    {dayData.is_available ? (
-                        <div className="grid grid-cols-2 gap-1 mt-2 w-full">
-                        <div className="grid gap-1 min-w-0">
-                            <Label htmlFor={`start-${day.name}`} className="text-[10px] sm:text-xs text-zinc-400 truncate">Start</Label>
-                            <div className="relative w-full">
-                            <Clock className="hidden sm:block absolute left-2.5 top-2.5 h-4 w-4 text-zinc-400 pointer-events-none" />
-                            <Input 
-                                id={`start-${day.name}`}
-                                type="time" 
-                                className="pl-2 sm:pl-9 bg-zinc-950 border-zinc-800 h-8 sm:h-9 w-full min-w-0 text-xs sm:text-sm px-1" 
-                                value={dayData.start_time?.slice(0, 5) || "09:00"}
-                                onChange={(e) => handleAvailabilityChange(day.value, "start_time", e.target.value)}
-                            />
-                            </div>
-                        </div>
-                        <div className="grid gap-1 min-w-0">
-                            <Label htmlFor={`end-${day.name}`} className="text-[10px] sm:text-xs text-zinc-400 truncate">End</Label>
-                            <div className="relative w-full">
-                            <Clock className="hidden sm:block absolute left-2.5 top-2.5 h-4 w-4 text-zinc-400 pointer-events-none" />
-                            <Input 
-                                id={`end-${day.name}`}
-                                type="time" 
-                                className="pl-2 sm:pl-9 bg-zinc-950 border-zinc-800 h-8 sm:h-9 w-full min-w-0 text-xs sm:text-sm px-1" 
-                                value={dayData.end_time?.slice(0, 5) || "17:00"}
-                                onChange={(e) => handleAvailabilityChange(day.value, "end_time", e.target.value)}
-                            />
-                            </div>
-                        </div>
-                        </div>
-                    ) : (
-                        <div className="mt-2 py-2 text-sm text-zinc-500 italic">
-                        Unavailable
-                        </div>
-                    )}
-                    </CardContent>
-                </Card>
-                );
-            })}
-            
-            <div className="flex justify-end pt-4">
-                <Button 
-                    onClick={handleSaveAvailability} 
-                    className="bg-primary hover:bg-primary/90 text-black font-bold"
-                    disabled={isSaving || !selectedEmployeeId}
-                >
-                    {isSaving ? <SmartCrewLogoMark size="xs" className="mr-2" /> : <Save className="mr-2 h-4 w-4" />}
-                    Save Changes
-                </Button>
+        <Card className="bg-zinc-900 border-zinc-800 text-white">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-white">Time-off Requests</CardTitle>
+              <div className="mt-1 text-sm text-zinc-400">Approve or decline employee time off requests.</div>
             </div>
-        </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Select value={filter} onValueChange={(v) => setFilter(v as TimeOffFilter)}>
+                <SelectTrigger className="w-full sm:w-[200px] bg-zinc-900 border-zinc-800 text-white">
+                  <SelectValue placeholder="Filter" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-white hover:text-white w-full sm:w-auto"
+                onClick={() => fetchTimeOffRequests(filter)}
+                disabled={isLoadingRequests}
+              >
+                Refresh
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isLoadingRequests ? (
+              <div className="flex items-center justify-center py-10">
+                <SmartCrewLogoMark size="sm" />
+              </div>
+            ) : timeOffRequests.length === 0 ? (
+              <div className="text-sm text-zinc-400">No time-off requests found.</div>
+            ) : (
+              timeOffRequests.map((req) => {
+                const statusClass =
+                  req.status === "approved"
+                    ? "bg-green-500/15 text-green-400"
+                    : req.status === "rejected"
+                      ? "bg-red-500/15 text-red-400"
+                      : "bg-yellow-500/15 text-yellow-300";
+
+                const isUpdating = updatingRequestId === req.id;
+                const disableActions = isUpdating || req.status !== "pending";
+
+                return (
+                  <div
+                    key={req.id}
+                    className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold text-white">
+                          {(req.employees?.name ?? "Employee")}
+                        </div>
+                        <div
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${statusClass}`}
+                        >
+                          {req.status}
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs text-zinc-400">
+                        {req.start_date} → {req.end_date} • {req.employees?.position ?? "—"}
+                      </div>
+                      <div className="mt-1 text-sm text-zinc-300 break-words">{req.reason}</div>
+                    </div>
+
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                      <Button
+                        type="button"
+                        className="bg-primary hover:bg-primary/90 text-black font-bold"
+                        onClick={() => updateRequestStatus(req.id, "approved")}
+                        disabled={disableActions}
+                      >
+                        {isUpdating ? <SmartCrewLogoMark size="xs" /> : "Approve"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-zinc-700 bg-transparent hover:bg-white/10 text-white hover:text-white"
+                        onClick={() => updateRequestStatus(req.id, "rejected")}
+                        disabled={disableActions}
+                      >
+                        Decline
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );
