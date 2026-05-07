@@ -47,6 +47,39 @@ async function sendEmailWithResend(args: { to: string; subject: string; html: st
   }
 }
 
+async function sendEmailWithBrevo(args: { to: string; subject: string; html: string }) {
+  const apiKey = Deno.env.get('BREVO_API_KEY')
+  if (!apiKey) {
+    throw new Error('Missing BREVO_API_KEY')
+  }
+
+  const senderEmail = Deno.env.get('BREVO_SENDER_EMAIL') || Deno.env.get('BREVO_FROM_EMAIL')
+  const senderName = Deno.env.get('BREVO_SENDER_NAME') || Deno.env.get('BREVO_FROM_NAME') || 'SmartCrew Scheduler'
+  if (!senderEmail) {
+    throw new Error('Missing BREVO_SENDER_EMAIL')
+  }
+
+  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: senderName, email: senderEmail },
+      to: [{ email: args.to }],
+      subject: args.subject,
+      htmlContent: args.html,
+    }),
+  })
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '')
+    throw new Error(`Brevo error: ${resp.status} ${resp.statusText}${text ? ` - ${text}` : ''}`)
+  }
+}
+
 serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -84,7 +117,7 @@ serve(async (req: Request) => {
     // 3) http://localhost:5173 — Vite default; only used for local dev when 1 and 2 are missing.
     const siteBase = (Deno.env.get('SITE_URL') || req.headers.get('origin') || 'http://localhost:5173').replace(/\/$/, '')
 
-    const shouldUseResend = Boolean(Deno.env.get('RESEND_API_KEY'))
+    const shouldUseBrevo = Boolean(Deno.env.get('BREVO_API_KEY'))
     const redirectTo = `${siteBase}/reset-password`
     const userData = {
       employee_id: employee_id,
@@ -97,7 +130,7 @@ serve(async (req: Request) => {
     let authData: { user: { id: string } | null } = { user: null }
     let inviteLink: string | null = null
 
-    if (shouldUseResend) {
+    if (shouldUseBrevo) {
       const { data, error } = await supabaseAdmin.auth.admin.generateLink({
         type: 'invite',
         email,
@@ -146,7 +179,7 @@ serve(async (req: Request) => {
         }
     }
 
-    if (shouldUseResend) {
+    if (shouldUseBrevo) {
       if (!inviteLink) {
         throw new Error('Invite link was not generated')
       }
@@ -157,7 +190,7 @@ serve(async (req: Request) => {
         employee_name: displayName,
       })
 
-      await sendEmailWithResend({
+      await sendEmailWithBrevo({
         to: email,
         subject: "You’re invited to SmartCrew Scheduler",
         html,
