@@ -581,6 +581,13 @@ function useTawkToWidget() {
     window.Tawk_API = window.Tawk_API ?? {};
     window.Tawk_LoadStart = new Date();
 
+    const api = window.Tawk_API as unknown as { onLoad?: unknown };
+    const prevOnLoad = typeof api.onLoad === "function" ? (api.onLoad as () => void) : undefined;
+    api.onLoad = () => {
+      prevOnLoad?.();
+      window.dispatchEvent(new Event("smartcrew:tawkLoaded"));
+    };
+
     const script = document.createElement("script");
     script.id = "tawkto-script";
     script.async = true;
@@ -731,6 +738,7 @@ function ScheduleMiniPreview() {
 export default function LandingPage() {
   useTawkToWidget();
   const privacyKey = "smartcrew:privacyConsent:v1";
+  const supportChatKey = "smartcrew:openSupportChatOnce:v1";
   const [hasPrivacyConsent, setHasPrivacyConsent] = useState(() => {
     try {
       return window.localStorage.getItem(privacyKey) === "accepted";
@@ -748,6 +756,31 @@ export default function LandingPage() {
     setHasPrivacyConsent(true);
   };
 
+  useEffect(() => {
+    const apply = () => {
+      try {
+        const shouldOpen = window.localStorage.getItem(supportChatKey) === "1";
+        if (!shouldOpen) return;
+      } catch {
+        return;
+      }
+
+      const api = (window as unknown as { Tawk_API?: { showWidget?: () => void; maximize?: () => void } }).Tawk_API;
+      if (!api) return;
+      api.showWidget?.();
+      api.maximize?.();
+      try {
+        window.localStorage.removeItem(supportChatKey);
+      } catch {
+        return;
+      }
+    };
+
+    const onLoaded = () => apply();
+    window.addEventListener("smartcrew:tawkLoaded", onLoaded as EventListener);
+    return () => window.removeEventListener("smartcrew:tawkLoaded", onLoaded as EventListener);
+  }, []);
+
   const openSupportChat = () => {
     const apply = () => {
       const api = (window as unknown as { Tawk_API?: { showWidget?: () => void; maximize?: () => void } }).Tawk_API;
@@ -757,9 +790,21 @@ export default function LandingPage() {
       return true;
     };
 
+    try {
+      window.localStorage.setItem(supportChatKey, "1");
+    } catch {
+      // ignore
+    }
+
     if (apply()) return;
     window.setTimeout(apply, 250);
     window.setTimeout(apply, 900);
+    window.setTimeout(() => {
+      const ok = apply();
+      if (!ok) {
+        window.location.href = "mailto:smartcrewscheduler@gmail.com";
+      }
+    }, 1800);
   };
 
   return (
