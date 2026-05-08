@@ -5,6 +5,7 @@ import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { format, parse, isToday, isTomorrow, startOfWeek, endOfWeek, differenceInMinutes } from "date-fns";
 import { useNavigate } from "react-router-dom";
+import { devError } from "@/lib/utils";
 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -68,7 +69,7 @@ export default function EmployeeDashboard() {
       .order("start_time", { ascending: true })
       .limit(10);
 
-    if (shiftError) console.error("Error fetching shifts:", shiftError);
+    if (shiftError) devError("Error fetching shifts:", shiftError);
     setShifts((shiftsData as MyShift[]) || []);
 
     const start = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -122,7 +123,7 @@ export default function EmployeeDashboard() {
       .limit(20);
 
     if (error) {
-      console.error("Error fetching time off requests:", error);
+      devError("Error fetching time off requests:", error);
       return;
     }
     setTimeOffRequests((data as TimeOffRequest[]) || []);
@@ -147,7 +148,7 @@ export default function EmployeeDashboard() {
           .single();
 
         if (empError) {
-          console.warn("Could not find employee record:", empError);
+          devError("Could not find employee record:", empError);
         }
         if (!employee || cancelled) return;
 
@@ -207,7 +208,7 @@ export default function EmployeeDashboard() {
         }
         channelRef.current = rt;
       } catch (error) {
-        console.error("Error fetching employee dashboard:", error);
+        devError("Error fetching employee dashboard:", error);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -253,7 +254,7 @@ export default function EmployeeDashboard() {
       setTimeOffReason("");
       await loadTimeOffRequests(employeeId);
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error("Could not submit the request. Please try again.");
     } finally {
       setIsSubmittingTimeOff(false);
@@ -294,7 +295,7 @@ export default function EmployeeDashboard() {
               toast.success("Clocked In Successfully");
           }
       } catch (error) {
-          console.error("Clock error:", error);
+          devError("Clock error:", error);
           toast.error("Failed to update clock status");
       }
   };

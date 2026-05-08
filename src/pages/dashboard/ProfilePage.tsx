@@ -8,6 +8,7 @@ import { Camera } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { toast } from "sonner";
+import { devError } from "@/lib/utils";
 
 export default function ProfilePage() {
   const [user, setUser] = useState({
@@ -51,7 +52,7 @@ export default function ProfilePage() {
         });
       }
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      devError("Error fetching profile:", error);
     } finally {
       setIsLoading(false);
     }
@@ -111,7 +112,7 @@ export default function ProfilePage() {
         toast.success('Profile picture updated!');
 
     } catch (error) {
-        console.error('Error uploading avatar:', error);
+        devError('Error uploading avatar:', error);
         toast.error('Failed to upload avatar. Make sure the "avatars" storage bucket exists and is public.');
     } finally {
         setIsSaving(false);
@@ -133,7 +134,7 @@ export default function ProfilePage() {
         if (error) throw error;
         toast.success("Profile updated successfully!");
     } catch (error) {
-        console.error("Error updating profile:", error);
+        devError("Error updating profile:", error);
         toast.error("Failed to update profile.");
     } finally {
         setIsSaving(false);

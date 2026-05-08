@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { cn } from "@/lib/utils";
+import { cn, devError } from "@/lib/utils";
 import {
   LayoutDashboard,
   Calendar,
@@ -71,7 +71,7 @@ export function Sidebar({
           setUserRole(p.role);
         }
       } catch (error) {
-        console.error("Error loading sidebar role:", error);
+        devError("Error loading sidebar role:", error);
       }
     }
     getUserRole();

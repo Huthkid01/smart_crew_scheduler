@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Zap, Eye, EyeOff } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { getSessionSafe, supabase } from "@/supabase/client";
+import { devError, userSafeErrorMessage } from "@/lib/utils";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -85,9 +86,8 @@ export default function LoginPage() {
       navigate(orgId ? "/dashboard" : "/signup");
     } catch (err: unknown) {
       clearTimeout(timeoutId);
-      console.error(err);
-      const errorMessage = err instanceof Error ? err.message : "Invalid email or password";
-      setError(errorMessage);
+      devError(err);
+      setError(userSafeErrorMessage(err, "Invalid email or password"));
     } finally {
       clearTimeout(timeoutId);
       setIsLoading(false);

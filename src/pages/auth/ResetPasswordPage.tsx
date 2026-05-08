@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Zap, Eye, EyeOff } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { getSessionSafe, supabase } from "@/supabase/client";
+import { devError, devLog, userSafeErrorMessage } from "@/lib/utils";
 
 const resetPasswordSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -38,7 +39,7 @@ export default function ResetPasswordPage() {
       if (!session) {
         // If no session, they might have clicked an old link or are not authenticated properly
         // In a real app, we might want to redirect to login or show an error
-        console.log("No session found on reset password page");
+        devLog("No session found on reset password page");
       }
     };
     checkSession();
@@ -69,9 +70,8 @@ export default function ResetPasswordPage() {
       setSuccess(true);
       setTimeout(() => navigate('/dashboard'), 2000); // Redirect directly to dashboard
     } catch (err: unknown) {
-      console.error(err);
-      const errorMessage = err instanceof Error ? err.message : "Failed to update password";
-      setError(errorMessage);
+      devError(err);
+      setError(userSafeErrorMessage(err, "Failed to update password. Please try again."));
     } finally {
       setIsLoading(false);
     }

@@ -25,7 +25,7 @@ import { getSessionSafe, supabase } from "@/supabase/client";
 import type { Database } from "@/supabase/types";
 import { toast } from "sonner";
 import { useOrgSettings } from "@/contexts/orgSettings";
-import { formatCurrency } from "@/lib/utils";
+import { devError, formatCurrency, userSafeErrorMessage } from "@/lib/utils";
 
 interface Profile {
   org_id: string;
@@ -86,9 +86,8 @@ export default function EmployeesPage() {
         setEmployees(employeesData || []);
       }
     } catch (error) {
-      console.error('Error fetching employees:', error);
+      devError('Error fetching employees:', error);
     } finally {
-      console.log("EmployeesPage: fetchEmployees finished, setting isLoading false");
       setIsLoading(false);
     }
   }
@@ -169,7 +168,7 @@ export default function EmployeesPage() {
 
                 toast.success("Employee added and invitation sent!");
             } catch (inviteError) {
-                console.error("Invitation failed:", inviteError);
+                devError("Invitation failed:", inviteError);
                 toast.warning("Employee added, but invitation failed to send. Please retry.");
             }
 
@@ -179,7 +178,7 @@ export default function EmployeesPage() {
         setIsAddOpen(false);
         setEditingEmployee(null);
     } catch (error) {
-        console.error('Error saving employee:', error);
+        devError('Error saving employee:', error);
         toast.error('Failed to save employee');
     }
   };
@@ -231,10 +230,10 @@ export default function EmployeesPage() {
                  });
                  if (!resp.ok) {
                    const body = await resp.json().catch(() => ({}));
-                   console.error("Failed to delete auth user:", body);
+                   devError("Failed to delete auth user:", body);
                  }
              } catch (err) {
-                 console.error("Failed to delete auth user:", err);
+                 devError("Failed to delete auth user:", err);
                  // We continue to delete the record so they are removed from the list
              }
           }
@@ -252,7 +251,7 @@ export default function EmployeesPage() {
             const code = typeof codeValue === "string" ? codeValue : "";
             if (code === "23503") {
               throw new Error(
-                "This employee has time tracking records. Run the latest Supabase migration to enable cascade deletes for time_entries, then try again."
+                "This employee has time tracking records and can’t be deleted yet."
               );
             }
             throw error;
@@ -261,13 +260,8 @@ export default function EmployeesPage() {
           setEmployees(employees.filter(emp => emp.id !== id));
           toast.success("Employee deleted successfully!");
       } catch (error) {
-          console.error('Error deleting employee:', error);
-          const messageValue =
-            error && typeof error === "object" && "message" in error
-              ? (error as { message?: unknown }).message
-              : undefined;
-          const msg = typeof messageValue === "string" ? messageValue : "Failed to delete employee";
-          toast.error(msg);
+          devError('Error deleting employee:', error);
+          toast.error(userSafeErrorMessage(error, "Failed to delete employee"));
       }
   };
 
@@ -312,8 +306,8 @@ export default function EmployeesPage() {
 
       toast.success(`Invitation resent to ${employee.email}`);
     } catch (error) {
-      console.error("Invitation resend failed:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to resend invitation");
+      devError("Invitation resend failed:", error);
+      toast.error(userSafeErrorMessage(error, "Failed to resend invitation. Please try again."));
     }
   };
 
@@ -349,8 +343,8 @@ export default function EmployeesPage() {
           toast.success(`Login access revoked for ${email}`);
           setIsRevokeOpen(false);
       } catch (error) {
-          console.error("Error revoking access:", error);
-          toast.error(error instanceof Error ? error.message : "Failed to revoke access");
+          devError("Error revoking access:", error);
+          toast.error(userSafeErrorMessage(error, "Failed to revoke access. Please try again."));
       }
   };
 

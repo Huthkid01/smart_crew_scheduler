@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { toast } from "sonner";
+import { devError } from "@/lib/utils";
 
 type TimeOffStatus = "pending" | "approved" | "rejected";
 type TimeOffFilter = TimeOffStatus | "all";
@@ -47,7 +48,7 @@ export default function AvailabilityPage() {
         const role = (profile as any).role || 'employee';
         if (!cancelled) setUserRole(role);
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        devError("Error fetching user data:", error);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -75,7 +76,7 @@ export default function AvailabilityPage() {
       if (error) throw error;
       setTimeOffRequests((data as TimeOffRequestRow[]) || []);
     } catch (error) {
-      console.error("Error fetching time off requests:", error);
+      devError("Error fetching time off requests:", error);
       toast.error("Could not load time-off requests.");
     } finally {
       setIsLoadingRequests(false);
@@ -100,7 +101,7 @@ export default function AvailabilityPage() {
       toast.success(status === "approved" ? "Request approved." : "Request declined.");
       fetchTimeOffRequests(filter);
     } catch (error) {
-      console.error("Error updating request:", error);
+      devError("Error updating request:", error);
       toast.error("Could not update the request.");
     } finally {
       setUpdatingRequestId(null);

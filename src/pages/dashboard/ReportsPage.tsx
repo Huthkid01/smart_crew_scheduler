@@ -7,7 +7,7 @@ import { supabase } from "@/supabase/client";
 import { format, subDays, startOfDay, endOfDay, eachDayOfInterval, parse, differenceInMinutes } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { useOrgSettings } from "@/contexts/orgSettings";
-import { formatCurrency } from "@/lib/utils";
+import { devError, formatCurrency } from "@/lib/utils";
 
 interface DailyReport {
   name: string;
@@ -180,7 +180,7 @@ export default function ReportsPage() {
       setAttendance((attendanceData as AttendanceRow[]) || []);
 
     } catch (error) {
-      console.error("Error fetching report data:", error);
+      devError("Error fetching report data:", error);
     } finally {
       setIsLoading(false);
     }

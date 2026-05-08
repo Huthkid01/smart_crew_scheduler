@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Zap, ArrowLeft } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
+import { devError, userSafeErrorMessage } from "@/lib/utils";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -39,9 +40,8 @@ export default function ForgotPasswordPage() {
       
       setMessage("Check your email for the password reset link.");
     } catch (err: unknown) {
-      console.error(err);
-      const errorMessage = err instanceof Error ? err.message : "Failed to send reset email";
-      setError(errorMessage);
+      devError(err);
+      setError(userSafeErrorMessage(err, "Failed to send reset email. Please try again."));
     } finally {
       setIsLoading(false);
     }

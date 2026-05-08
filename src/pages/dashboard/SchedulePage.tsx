@@ -9,6 +9,7 @@ import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { getSessionSafe, supabase } from "@/supabase/client";
 import { format, parseISO } from "date-fns";
 import { DayPicker, type DateRange } from "react-day-picker";
+import { devError } from "@/lib/utils";
 // import type { Database } from "@/supabase/types";
 
 interface Profile {
@@ -141,7 +142,7 @@ export default function SchedulePage() {
         setEmployees(employeesData || []);
       }
     } catch (error) {
-      console.error("Error loading schedule context:", error);
+      devError("Error loading schedule context:", error);
     } finally {
       setIsRoleLoading(false);
     }
@@ -211,7 +212,7 @@ export default function SchedulePage() {
         fetchShifts();
         toast.success("Shift added to drafts!");
     } catch (error) {
-        console.error("Error adding shift:", error);
+        devError("Error adding shift:", error);
         toast.error("Failed to add shift");
     }
   }
@@ -264,7 +265,7 @@ export default function SchedulePage() {
 
       setEvents(formattedEvents);
     } catch (error) {
-      console.error("Error fetching shifts:", error);
+      devError("Error fetching shifts:", error);
     }
   }
 
@@ -291,10 +292,10 @@ export default function SchedulePage() {
 
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}));
-        console.error("notify-shift failed:", body);
+        devError("notify-shift failed:", body);
       }
     } catch (err) {
-      console.error("notify-shift error:", err);
+      devError("notify-shift error:", err);
     }
   }
 
@@ -336,123 +337,36 @@ export default function SchedulePage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const orgId = (profile as any).org_id;
 
-        // --- Client-Side AI Logic Start ---
         
-        // 1. Fetch employees and their availability
-        const { data: employeesData, error: empError } = await supabase
-          .from('employees')
-          .select(`
-            *,
-            employee_skills (
-              skill_id,
-              proficiency_level,
-              skills (name)
-            ),
-            availability (*)
-          `)
-          .eq('org_id', orgId)
-          .eq('is_active', true);
 
-        if (empError) throw empError;
-
-        // 2. Fetch existing shifts
-        const { error: shiftError } = await supabase
-            .from('shifts')
-            .select('*')
-            .eq('org_id', orgId)
-            .gte('date', startDate)
-            .lte('date', endDate);
-        
-        if (shiftError) throw shiftError;
-
-        // 3. Construct prompt
-        const prompt = `
-          You are an expert scheduler. Generate an optimal work schedule for the following employees from ${startDate} to ${endDate}.
-          
-          Optimization Goal: ${goal}
-          
-          Employees:
-          ${JSON.stringify(employeesData, null, 2)}
-          
-          Constraints:
-          - Respect employee availability.
-          - Ensure required skills are covered (assume generic requirement if not specified).
-          - Do not schedule employees for more than 40 hours a week unless necessary.
-          - Shifts should be between 4-8 hours.
-          
-          Return the schedule as a JSON array of objects with the following structure:
-          [
-            {
-              "employee_id": 123,
-              "date": "YYYY-MM-DD",
-              "start_time": "HH:MM",
-              "end_time": "HH:MM",
-              "role": "Position Name"
-            }
-          ]
-          Do not include any explanation, just the JSON.
-        `;
-
-        // 4. Call Groq API (replacing Gemini)
-        const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-        if (!apiKey) {
-            throw new Error("VITE_GROQ_API_KEY is not set in your .env file.");
+        const { data: sessionData } = await getSessionSafe();
+        const accessToken = sessionData.session?.access_token ?? null;
+        if (!accessToken) {
+          toast.error("You must be signed in to generate schedules.");
+          return;
         }
 
-        const generateWithGroq = async (promptText: string) => {
-            try {
-                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${apiKey}`
-                    },
-                    body: JSON.stringify({
-                        messages: [
-                            {
-                                role: "user",
-                                content: promptText
-                            }
-                        ],
-                        model: "llama-3.3-70b-versatile",
-                        temperature: 0.5,
-                        max_tokens: 4096,
-                        response_format: { type: "json_object" }
-                    })
-                });
+        const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-schedule`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            org_id: orgId,
+            start_date: startDate,
+            end_date: endDate,
+            optimization_goal: goal,
+          }),
+        });
 
-                const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(`Groq API Error: ${data.error.message}`);
-                }
-
-                return data.choices?.[0]?.message?.content || "";
-            } catch (error) {
-                console.error("Groq API call failed:", error);
-                throw error;
-            }
-        };
-
-        const textResponse = await generateWithGroq(prompt);
-        
-        // Extract JSON from response
-        const jsonMatch = textResponse.match(/\[[\s\S]*\]/);
-        let generatedSchedule = [];
-        
-        if (jsonMatch) {
-            try {
-                generatedSchedule = JSON.parse(jsonMatch[0]);
-            } catch (e) {
-                console.error("Failed to parse JSON from AI response:", textResponse, e);
-                throw new Error("AI returned invalid JSON format.");
-            }
-        } else {
-             console.error("Failed to find JSON in AI response:", textResponse);
-             throw new Error("AI did not return a valid schedule.");
+        const body = await resp.json().catch(() => null);
+        if (!resp.ok) {
+          devError("generate-schedule failed:", body);
+          throw new Error("Schedule generation failed.");
         }
 
-        // --- Client-Side AI Logic End ---
+        const generatedSchedule = Array.isArray(body) ? body : [];
 
         // The AI returns a list of shifts. We need to save them to the database.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -481,9 +395,8 @@ export default function SchedulePage() {
         }
 
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-        console.error("Error generating schedule:", error);
-        toast.error(`Failed to generate schedule: ${errorMessage}`);
+        devError("Error generating schedule:", error);
+        toast.error("Failed to generate schedule. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -649,7 +562,7 @@ export default function SchedulePage() {
             fetchShifts();
         }
     } catch (error) {
-        console.error("Error publishing shifts:", error);
+        devError("Error publishing shifts:", error);
         toast.error("Failed to publish shifts.");
     } finally {
         setIsPublishing(false);
@@ -696,7 +609,7 @@ export default function SchedulePage() {
         setIsEditShiftOpen(false);
         fetchShifts();
     } catch (error) {
-        console.error("Error deleting shift:", error);
+        devError("Error deleting shift:", error);
         toast.error("Failed to delete shift");
     }
   };
@@ -750,7 +663,7 @@ export default function SchedulePage() {
         setIsEditShiftOpen(false);
         fetchShifts();
     } catch (error) {
-        console.error("Error updating shift:", error);
+        devError("Error updating shift:", error);
         toast.error("Failed to update shift");
     }
   };

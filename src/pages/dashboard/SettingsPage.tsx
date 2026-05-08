@@ -8,7 +8,7 @@ import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency } from "@/lib/utils";
+import { devError, formatCurrency } from "@/lib/utils";
 // import type { Database } from "@/supabase/types";
 
 interface Profile {
@@ -69,7 +69,7 @@ export default function SettingsPage() {
         }
       }
     } catch (error) {
-      console.error("Error fetching organization:", error);
+      devError("Error fetching organization:", error);
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +93,7 @@ export default function SettingsPage() {
         toast.success("Organization settings updated successfully!");
         window.dispatchEvent(new Event("smartcrew:orgSettingsUpdated"));
     } catch (error) {
-        console.error("Error updating organization:", error);
+        devError("Error updating organization:", error);
         toast.error("Failed to update organization.");
     } finally {
         setIsSaving(false);

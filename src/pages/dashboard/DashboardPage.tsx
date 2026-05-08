@@ -11,6 +11,7 @@ import EmployeeDashboard from "./EmployeeDashboard";
 import { useEffect, useState } from "react";
 import { getSessionSafe, supabase } from "@/supabase/client";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
+import { devError } from "@/lib/utils";
 
 export default function DashboardPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -33,7 +34,7 @@ export default function DashboardPage() {
           (profile as unknown as { role?: string | null } | null)?.role ?? "employee";
         setUserRole(role);
       } catch (error) {
-        console.error("Error checking role:", error);
+        devError("Error checking role:", error);
       } finally {
         setIsLoading(false);
       }

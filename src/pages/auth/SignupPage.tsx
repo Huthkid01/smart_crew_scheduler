@@ -10,6 +10,7 @@ import { Zap, Eye, EyeOff } from "lucide-react";
 import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { getSessionSafe, supabase } from "@/supabase/client";
 import type { Database } from "@/supabase/types";
+import { devError, userSafeErrorMessage } from "@/lib/utils";
 
 const signupSchema = z.object({
   orgName: z.string().min(2, "Organization name is required"),
@@ -123,7 +124,7 @@ export default function SignupPage() {
       if (orgError || !orgData) {
              // If organization creation fails, we might want to cleanup user, but for MVP/demo
              // we'll just log and throw. In real app, consider transaction or cleanup.
-             console.error("Org creation failed", orgError);
+             devError("Org creation failed", orgError);
              throw new Error("Failed to create organization. Please try again.");
       }
 
@@ -141,15 +142,14 @@ export default function SignupPage() {
       });
 
       if (profileError) {
-        console.error("Profile upsert failed", profileError);
+        devError("Profile upsert failed", profileError);
         throw new Error("Failed to create profile. Please contact support.");
       }
 
       navigate('/dashboard');
     } catch (err: unknown) {
-      console.error(err);
-      const errorMessage = err instanceof Error ? err.message : "An error occurred during signup";
-      setError(errorMessage);
+      devError(err);
+      setError(userSafeErrorMessage(err, "An error occurred during signup. Please try again."));
     } finally {
       setIsLoading(false);
     }
@@ -175,7 +175,7 @@ export default function SignupPage() {
         .single();
 
       if (orgError || !orgData) {
-        console.error("Org creation failed", orgError);
+        devError("Org creation failed", orgError);
         throw new Error("Failed to create organization. Please try again.");
       }
 
@@ -192,15 +192,14 @@ export default function SignupPage() {
       });
 
       if (profileError) {
-        console.error("Profile upsert failed", profileError);
+        devError("Profile upsert failed", profileError);
         throw new Error("Failed to finish setup. Please contact support.");
       }
 
       navigate("/dashboard");
     } catch (err: unknown) {
-      console.error(err);
-      const errorMessage = err instanceof Error ? err.message : "An error occurred during setup";
-      setError(errorMessage);
+      devError(err);
+      setError(userSafeErrorMessage(err, "An error occurred during setup. Please try again."));
     } finally {
       setIsLoading(false);
     }

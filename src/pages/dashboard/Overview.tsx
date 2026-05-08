@@ -6,7 +6,7 @@ import { SmartCrewLogoMark } from "@/components/SmartCrewLogoMark";
 import { supabase } from "@/supabase/client";
 import { startOfWeek, endOfWeek, format, parse, differenceInMinutes } from "date-fns";
 import { useOrgSettings } from "@/contexts/orgSettings";
-import { formatCurrency } from "@/lib/utils";
+import { devError, formatCurrency } from "@/lib/utils";
 
 interface ShiftWithCost {
   start_time: string;
@@ -158,7 +158,7 @@ export default function Overview() {
       try {
         await Promise.all([fetchShiftKpisAndUpcoming(), fetchAttendance()]);
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
+        devError("Error fetching dashboard data:", error);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
