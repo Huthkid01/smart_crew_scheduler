@@ -21,6 +21,11 @@ type NotifyShift = {
   schedule_url?: string
 }
 
+function getBearerToken(authHeader: string) {
+  const match = authHeader.match(/^Bearer\s+(.+)$/i)
+  return match?.[1]?.trim() ?? null
+}
+
 const TEMPLATE_NEW_SHIFT = `<!doctype html>
 <html lang="en">
   <head>
@@ -292,6 +297,43 @@ serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     )
 
+    const token = getBearerToken(authHeader)
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Invalid Authorization header" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      })
+    }
+
+    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token)
+    if (userError || !userData.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      })
+    }
+
+    const { data: profileRow, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("org_id, role")
+      .eq("id", userData.user.id)
+      .maybeSingle()
+
+    if (profileError || !profileRow?.org_id) {
+      return new Response(JSON.stringify({ error: "Missing profile" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403,
+      })
+    }
+
+    const role = String((profileRow as { role?: unknown }).role ?? "")
+    if (role !== "admin" && role !== "manager") {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403,
+      })
+    }
+
     const body = (await req.json().catch(() => null)) as
       | { action?: ShiftAction; org_id?: string; shifts?: NotifyShift[]; app_name?: string; schedule_url?: string }
       | null
@@ -309,13 +351,32 @@ serve(async (req: Request) => {
     const scheduleUrl = body?.schedule_url || `${siteBase}/dashboard/schedule`
     const appName = body?.app_name || "SmartCrew Scheduler"
 
+    const orgId = (typeof body?.org_id === "string" && body.org_id) || String(profileRow.org_id)
+    const { data: orgRow, error: orgError } = await supabaseAdmin
+      .from("organizations")
+      .select("subscription_tier")
+      .eq("id", orgId)
+      .maybeSingle()
+
+    if (orgError || !orgRow) throw orgError ?? new Error("Organization not found")
+
+    const subscriptionTier = String((orgRow as { subscription_tier?: unknown }).subscription_tier ?? "free").toLowerCase()
+    if (subscriptionTier !== "pro") {
+      const results = shifts.map((s) => ({ employee_id: s.employee_id, status: "skipped" as const }))
+      return new Response(JSON.stringify({ ok: true, plan: subscriptionTier, results }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      })
+    }
+
     const employeeIds = Array.from(
       new Set(shifts.map((s) => (typeof s.employee_id === "string" ? s.employee_id : "")).filter(Boolean)),
     )
 
     const { data: employeeRows, error: employeeError } = await supabaseAdmin
       .from("employees")
-      .select("id, name, email, position")
+      .select("id, name, email, position, org_id")
+      .eq("org_id", orgId)
       // @ts-ignore
       .in("id", employeeIds)
 

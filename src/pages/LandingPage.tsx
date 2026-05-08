@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Bot, Calendar, CheckCircle2, Clock, Users, Zap } from "lucide-react";
+import { ArrowRight, Bot, Calendar, CheckCircle2, Clock, Instagram, Mail, Users, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "react-router-dom";
@@ -576,29 +576,10 @@ function useTawkToWidget() {
     if (typeof window === "undefined") return;
 
     const existing = document.getElementById("tawkto-script");
-    const show = () => {
-      const api = window.Tawk_API;
-      const showWidget = typeof api?.showWidget === "function" ? (api.showWidget as () => void) : undefined;
-      showWidget?.();
-    };
-    const hide = () => {
-      const api = window.Tawk_API;
-      const hideWidget = typeof api?.hideWidget === "function" ? (api.hideWidget as () => void) : undefined;
-      hideWidget?.();
-    };
-
-    if (existing) {
-      show();
-      return () => {
-        hide();
-      };
-    }
+    if (existing) return;
 
     window.Tawk_API = window.Tawk_API ?? {};
     window.Tawk_LoadStart = new Date();
-    (window.Tawk_API as Record<string, unknown>).onLoad = () => {
-      show();
-    };
 
     const script = document.createElement("script");
     script.id = "tawkto-script";
@@ -606,7 +587,6 @@ function useTawkToWidget() {
     script.src = `https://embed.tawk.to/${propertyId}/${widgetId}`;
     script.charset = "UTF-8";
     script.setAttribute("crossorigin", "*");
-    script.addEventListener("load", show);
 
     const firstScript = document.getElementsByTagName("script")[0];
     if (firstScript?.parentNode) {
@@ -614,10 +594,6 @@ function useTawkToWidget() {
     } else {
       document.head.appendChild(script);
     }
-
-    return () => {
-      hide();
-    };
   }, []);
 }
 
@@ -754,6 +730,37 @@ function ScheduleMiniPreview() {
 
 export default function LandingPage() {
   useTawkToWidget();
+  const privacyKey = "smartcrew:privacyConsent:v1";
+  const [hasPrivacyConsent, setHasPrivacyConsent] = useState(() => {
+    try {
+      return window.localStorage.getItem(privacyKey) === "accepted";
+    } catch {
+      return true;
+    }
+  });
+
+  const acceptPrivacyConsent = () => {
+    try {
+      window.localStorage.setItem(privacyKey, "accepted");
+    } catch {
+      // ignore
+    }
+    setHasPrivacyConsent(true);
+  };
+
+  const openSupportChat = () => {
+    const apply = () => {
+      const api = (window as unknown as { Tawk_API?: { showWidget?: () => void; maximize?: () => void } }).Tawk_API;
+      if (!api) return false;
+      api.showWidget?.();
+      api.maximize?.();
+      return true;
+    };
+
+    if (apply()) return;
+    window.setTimeout(apply, 250);
+    window.setTimeout(apply, 900);
+  };
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black">
@@ -853,16 +860,16 @@ export default function LandingPage() {
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
             <p className="text-gray-400">Choose the plan that fits your team's needs.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
              {/* Starter Plan */}
              <div className="p-8 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col">
-                <h3 className="text-xl font-bold text-white mb-2">Starter</h3>
+                <h3 className="text-xl font-bold text-white mb-2">Free</h3>
                 <div className="text-4xl font-bold text-white mb-4">$0<span className="text-lg text-gray-400 font-normal">/mo</span></div>
-                <p className="text-gray-400 mb-6">Perfect for small teams getting started.</p>
+                <p className="text-gray-400 mb-6">Everything you need to start scheduling for free.</p>
                 <ul className="space-y-3 mb-8 flex-1">
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Up to 5 employees</li>
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Basic scheduling</li>
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> 1 week history</li>
+                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Scheduling (draft + publish)</li>
+                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Time tracking</li>
+                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Reports & exports</li>
                 </ul>
                 <Link to="/signup" className="mt-auto w-full">
                     <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white">Get Started</Button>
@@ -873,32 +880,16 @@ export default function LandingPage() {
              <div className="p-8 rounded-2xl bg-zinc-900 border-2 border-primary relative flex flex-col transform md:-translate-y-4">
                 <div className="absolute top-0 right-0 bg-primary text-black text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">POPULAR</div>
                 <h3 className="text-xl font-bold text-white mb-2">Pro</h3>
-                <div className="text-4xl font-bold text-white mb-4">$29<span className="text-lg text-gray-400 font-normal">/mo</span></div>
-                <p className="text-gray-400 mb-6">For growing businesses needing automation.</p>
+                <div className="text-4xl font-bold text-white mb-4">$5<span className="text-lg text-gray-400 font-normal">/mo</span></div>
+                <p className="text-gray-400 mb-6">Upgrade for notifications and automation.</p>
                 <ul className="space-y-3 mb-8 flex-1">
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Up to 50 employees</li>
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> AI Auto-scheduling</li>
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Time tracking</li>
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Advanced reporting</li>
+                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Email alerts for shift changes</li>
+                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> AI auto-scheduling</li>
+                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Priority support</li>
+                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Everything in Free</li>
                 </ul>
                 <Link to="/signup" className="mt-auto w-full">
-                    <Button className="w-full bg-primary hover:bg-primary/90 text-black font-bold">Try Pro Free</Button>
-                </Link>
-             </div>
-
-             {/* Enterprise Plan */}
-             <div className="p-8 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col">
-                <h3 className="text-xl font-bold text-white mb-2">Enterprise</h3>
-                <div className="text-4xl font-bold text-white mb-4">Custom</div>
-                <p className="text-gray-400 mb-6">For large organizations with complex needs.</p>
-                <ul className="space-y-3 mb-8 flex-1">
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Unlimited employees</li>
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Custom integrations</li>
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> Dedicated support</li>
-                    <li className="flex items-center text-gray-300"><CheckCircle2 className="h-5 w-5 text-primary mr-2" /> SLA & Security</li>
-                </ul>
-                <Link to="mailto:odusanyauthman2019@gmail.com" className="mt-auto w-full">
-                    <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white">Contact Sales</Button>
+                    <Button className="w-full bg-primary hover:bg-primary/90 text-black font-bold">Get Pro</Button>
                 </Link>
              </div>
           </div>
@@ -962,6 +953,61 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section className="py-20 bg-black" id="faq">
+        <div className="container mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Frequently Asked Questions</h2>
+            <p className="text-gray-400">Quick answers to common questions about SmartCrew Scheduler.</p>
+          </div>
+
+          <div className="mx-auto max-w-3xl space-y-3">
+            <details className="group rounded-xl border border-white/10 bg-white/5 p-5">
+              <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-white">
+                What is SmartCrew Scheduler?
+                <span className="text-gray-400 transition-transform group-open:rotate-180">▾</span>
+              </summary>
+              <div className="mt-3 text-sm text-gray-300 leading-relaxed">
+                SmartCrew Scheduler helps teams create schedules faster, track time, and view reports from one dashboard.
+              </div>
+            </details>
+
+            <details className="group rounded-xl border border-white/10 bg-white/5 p-5">
+              <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-white">
+                Can employees see admin settings?
+                <span className="text-gray-400 transition-transform group-open:rotate-180">▾</span>
+              </summary>
+              <div className="mt-3 text-sm text-gray-300 leading-relaxed">
+                No. Employees only see what they need for their shifts, profile, time clock, and time-off requests.
+              </div>
+            </details>
+
+            <details className="group rounded-xl border border-white/10 bg-white/5 p-5">
+              <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-white">
+                How do I invite employees?
+                <span className="text-gray-400 transition-transform group-open:rotate-180">▾</span>
+              </summary>
+              <div className="mt-3 text-sm text-gray-300 leading-relaxed">
+                Admins and managers can add employees from the Employees page and send invitations by email.
+              </div>
+            </details>
+
+            <details className="group rounded-xl border border-white/10 bg-white/5 p-5">
+              <summary className="flex cursor-pointer list-none items-center justify-between text-base font-semibold text-white">
+                How do I contact support?
+                <span className="text-gray-400 transition-transform group-open:rotate-180">▾</span>
+              </summary>
+              <div className="mt-3 text-sm text-gray-300 leading-relaxed">
+                Email{" "}
+                <a className="text-primary hover:underline" href="mailto:smartcrewscheduler@gmail.com">
+                  smartcrewscheduler@gmail.com
+                </a>{" "}
+                or use the support chat widget on the home page.
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="relative overflow-hidden py-20 bg-primary/10">
         <CTA3DBackground />
@@ -994,18 +1040,110 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="py-12 bg-black border-t border-white/10">
-        <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center">
-          <div className="flex items-center gap-2 mb-4 md:mb-0">
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-              <Zap className="h-5 w-5 text-primary-foreground" />
+        <div className="container mx-auto px-6">
+          <div className="flex flex-col gap-10 md:grid md:grid-cols-2 md:items-start">
+            <div className="order-1 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                  <Zap className="h-5 w-5 text-primary-foreground" />
+                </div>
+                <span className="text-xl font-bold text-white">SmartCrew Scheduler</span>
+              </div>
+              <div className="hidden md:block text-gray-500 text-sm">© 2026 SmartCrew Scheduler. All rights reserved.</div>
             </div>
-            <span className="text-xl font-bold text-white">SmartCrew Scheduler</span>
-          </div>
-          <div className="text-gray-500 text-sm">
-            © 2026 SmartCrew Scheduler. All rights reserved.
+
+            <div className="order-2 grid grid-cols-1 gap-8 sm:grid-cols-2 md:justify-items-end">
+              <div className="space-y-3">
+                <div className="text-sm font-semibold text-white">Quick Links</div>
+                <div className="flex flex-col gap-2 text-sm text-gray-400">
+                  <a href="#features" className="hover:text-white transition-colors">
+                    Features
+                  </a>
+                  <a href="#pricing" className="hover:text-white transition-colors">
+                    Pricing
+                  </a>
+                  <Link to="/login" className="hover:text-white transition-colors">
+                    Login
+                  </Link>
+                  <Link to="/signup" className="hover:text-white transition-colors">
+                    Sign Up
+                  </Link>
+                </div>
+              </div>
+
+              <div className="space-y-3 sm:text-right">
+                <div className="text-sm font-semibold text-white">Connect with us</div>
+                <div className="flex items-center gap-2 sm:justify-end">
+                  <a
+                    href="mailto:smartcrewscheduler@gmail.com"
+                    className="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/5 p-2 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label="Email SmartCrew Scheduler"
+                  >
+                    <Mail className="h-5 w-5" aria-hidden />
+                  </a>
+                  <a
+                    href="https://www.instagram.com/smartcrewscheduler?igsh=MXhpb2FwaXo3YWkydA%3D%3D&utm_source=qr"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/5 p-2 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label="SmartCrew Scheduler on Instagram"
+                  >
+                    <Instagram className="h-5 w-5" aria-hidden />
+                  </a>
+                </div>
+
+                <div className="flex flex-col gap-2 text-sm text-gray-500 sm:items-end">
+                  <Link to="/privacy" className="hover:text-white transition-colors">
+                    Privacy Policy
+                  </Link>
+                  <Link to="/terms" className="hover:text-white transition-colors">
+                    Terms
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={openSupportChat}
+                    className="text-left hover:text-white transition-colors sm:text-right"
+                  >
+                    Contact Support
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="order-3 border-t border-white/10 pt-8 text-center text-gray-500 text-sm md:hidden">
+              © 2026 SmartCrew Scheduler. All rights reserved.
+            </div>
           </div>
         </div>
       </footer>
+
+      {!hasPrivacyConsent && (
+        <div className="fixed bottom-4 left-4 right-4 z-50 rounded-xl border border-white/10 bg-black/95 backdrop-blur md:left-6 md:right-auto md:max-w-xl">
+          <div className="px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-gray-300">
+              By using SmartCrew Scheduler, you agree to our privacy terms.
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Link to="/privacy">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                >
+                  Learn more
+                </Button>
+              </Link>
+              <Button
+                type="button"
+                className="bg-primary hover:bg-primary/90 text-black font-bold"
+                onClick={acceptPrivacyConsent}
+              >
+                Accept
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

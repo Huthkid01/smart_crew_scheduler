@@ -86,7 +86,7 @@ export default function SettingsPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error } = await (supabase.from('organizations') as any)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .update({ name: org.name, currency_code: org.currency_code } as any)
+            .update({ name: org.name, currency_code: org.currency_code, subscription_tier: org.subscription_tier } as any)
             .eq('id', org.id);
 
         if (error) throw error;
@@ -178,18 +178,23 @@ export default function SettingsPage() {
                         />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="tier">Subscription Tier</Label>
-                         <div className="flex items-center gap-2">
-                            <Input 
-                                id="tier" 
-                                value={org.subscription_tier.toUpperCase()} 
-                                className="bg-zinc-950 border-zinc-800" 
-                                disabled 
-                            />
-                            <Button type="button" variant="outline" className="shrink-0 bg-transparent text-white border-zinc-700 hover:bg-zinc-800">
-                                Upgrade Plan
-                            </Button>
-                         </div>
+                        <Label>Plan</Label>
+                        <Select
+                          value={org.subscription_tier}
+                          onValueChange={(value) => setOrg({ ...org, subscription_tier: value })}
+                          disabled={!canEditOrg}
+                        >
+                          <SelectTrigger className="bg-zinc-950 border-zinc-800 text-white">
+                            <SelectValue placeholder="Select plan" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                            <SelectItem value="free">Free — $0/mo</SelectItem>
+                            <SelectItem value="pro">Pro — $5/mo</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="text-xs text-zinc-400">
+                          Pro plan enables email notifications for shift changes.
+                        </div>
                     </div>
                 </div>
             </CardContent>
